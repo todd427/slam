@@ -31,6 +31,37 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
+        // Utility functions - MUST be defined before use!
+        const formatBid = (bid) => {
+          if (bid === 'Pass') return 'Pass';
+          if (bid === 'X') return 'X';
+          if (bid === 'XX') return 'XX';
+          if (bid === '?') return '?';
+          const suits = { C: '♣', D: '♦', H: '♥', S: '♠' };
+          const level = bid.charAt(0);
+          const suit = bid.substring(1);
+          return suit === 'NT' ? `${level}NT` : `${level}${suits[suit]}`;
+        };
+
+        const getVulColor = (vul) => {
+          const colors = {
+            'None': { bg: 'rgba(148, 163, 184, 0.1)', border: 'rgba(148, 163, 184, 0.3)', text: '#94a3b8' },
+            'N/S': { bg: 'rgba(248, 113, 113, 0.1)', border: 'rgba(248, 113, 113, 0.3)', text: '#f87171' },
+            'E/W': { bg: 'rgba(248, 113, 113, 0.1)', border: 'rgba(248, 113, 113, 0.3)', text: '#f87171' },
+            'All': { bg: 'rgba(220, 38, 38, 0.2)', border: 'rgba(220, 38, 38, 0.4)', text: '#ef4444' }
+          };
+          return colors[vul] || colors['None'];
+        };
+
+        const getModuleColor = (module) => {
+          const colors = {
+            'BASIC': { bg: 'rgba(96, 165, 250, 0.1)', border: 'rgba(96, 165, 250, 0.3)', text: '#60a5fa' },
+            'COMPETE': { bg: 'rgba(251, 146, 60, 0.1)', border: 'rgba(251, 146, 60, 0.3)', text: '#fb923c' },
+            'DEFENSE': { bg: 'rgba(248, 113, 113, 0.1)', border: 'rgba(248, 113, 113, 0.3)', text: '#f87171' }
+          };
+          return colors[module] || colors['BASIC'];
+        };
+
         // Lucide React icons as inline SVG components
         const Shuffle = ({ size = 24 }) => (
             <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -127,12 +158,12 @@
             correct_bid: "2H",
             alternatives: [],
             explanation: [
-              "With 6+ spades, use Jacoby Transfer (2♥ asks partner to bid 2♠).",
-              "This gets the strong hand as declarer and lets you show spade length."
+              "With 6 spades, use Jacoby Transfer: bid 2♥ to ask partner to bid 2♠.",
+              "This gets the strong hand as declarer and protects the opening lead."
             ],
             next_bids: [
               { seat: "W", bid: "Pass" },
-              { seat: "N", bid: "2S", explanation: "Accepts transfer" },
+              { seat: "N", bid: "2S", explanation: "Accepts transfer, bids your suit" },
               { seat: "E", bid: "Pass" },
               { seat: "S", bid: "Pass", explanation: "Weak hand, stop in partscore" },
               { seat: "W", bid: "Pass" }
@@ -822,6 +853,76 @@
           );
         };
 
+        // Helper functions for auction generation (outside component)
+        const getNextSeat = (seat) => {
+          const seats = ['N', 'E', 'S', 'W'];
+          const idx = seats.indexOf(seat);
+          return seats[(idx + 1) % 4];
+        };
+
+        const generatePartnerResponse = (scenario, userBid) => {
+          // Simplified partner logic
+          let bids = [];
+          let final_contract = `${formatBid(userBid)} by ${scenario.your_seat}`;
+          let evaluation = "Auction completed.";
+          
+          // Check if this is the correct or alternative bid - use scripted response
+          if (userBid === scenario.correct_bid || (scenario.alternatives && scenario.alternatives.includes(userBid))) {
+            // Use the pre-scripted continuation
+            if (scenario.next_bids && scenario.next_bids.length > 0) {
+              bids = scenario.next_bids;
+              final_contract = scenario.final_contract;
+              evaluation = scenario.contract_evaluation;
+            } else {
+              bids = [
+                { seat: getNextSeat(scenario.your_seat), bid: "Pass" },
+                { seat: getNextSeat(getNextSeat(scenario.your_seat)), bid: "Pass" },
+                { seat: getNextSeat(getNextSeat(getNextSeat(scenario.your_seat))), bid: "Pass" }
+              ];
+            }
+          } else {
+            // Generate a simple response for non-optimal bids
+            const seats = ['N', 'E', 'S', 'W'];
+            const yourIdx = seats.indexOf(scenario.your_seat);
+            const nextSeat = seats[(yourIdx + 1) % 4];
+            const partnerSeat = seats[(yourIdx + 2) % 4];
+            const lastSeat = seats[(yourIdx + 3) % 4];
+            
+            bids = [
+              { seat: nextSeat, bid: "Pass", explanation: "" },
+              { seat: partnerSeat, bid: "Pass", explanation: "" },
+              { seat: lastSeat, bid: "Pass", explanation: "" }
+            ];
+            
+            evaluation = `You bid ${formatBid(userBid)}. While legal, the optimal bid was ${formatBid(scenario.correct_bid)}. The auction ended in ${final_contract}.`;
+          }
+          
+          return { bids, final_contract, evaluation };
+        };
+
+        const generateAdaptedAuction = (scenario, userBid) => {
+          const auction = [...scenario.auction];
+          
+          // Replace the "?" with user's actual bid
+          const yourTurnIndex = auction.findIndex(b => b.bid === "?");
+          if (yourTurnIndex !== -1) {
+            auction[yourTurnIndex] = {
+              seat: scenario.your_seat,
+              bid: userBid,
+              explanation: "Your bid"
+            };
+          }
+          
+          // Generate partner responses
+          const continuation = generatePartnerResponse(scenario, userBid);
+          
+          return {
+            bids: [...auction, ...continuation.bids],
+            final_contract: continuation.final_contract,
+            evaluation: continuation.evaluation
+          };
+        };
+
         const PlayView = ({ onNavigate, selectedModule }) => {
           const [scenarios, setScenarios] = useState([]);
           const [currentIndex, setCurrentIndex] = useState(0);
@@ -881,7 +982,29 @@
           };
 
           const handleContinueAuction = () => {
-            setAuctionPhase('auction_complete');
+            try {
+              // Generate partner's response based on YOUR actual bid
+              const adaptedAuction = generateAdaptedAuction(currentScenario, selectedBid);
+              
+              // Update the scenario with the adapted auction
+              const updatedScenario = {
+                ...currentScenario,
+                adapted_auction: adaptedAuction,
+                final_contract: adaptedAuction.final_contract,
+                contract_evaluation: adaptedAuction.evaluation
+              };
+              
+              // Store the adapted scenario
+              const updatedScenarios = [...scenarios];
+              updatedScenarios[currentIndex] = updatedScenario;
+              setScenarios(updatedScenarios);
+              
+              setAuctionPhase('auction_complete');
+            } catch (error) {
+              console.error('Error continuing auction:', error);
+              // Fallback - just end the auction
+              setAuctionPhase('auction_complete');
+            }
           };
 
           const handleNext = () => {
@@ -1033,7 +1156,10 @@
 
               {/* Bidding Interface or Feedback */}
               {!showFeedback && auctionPhase === 'your_bid' && (
-                <BiddingInterface onBidSelect={onBidSelect} />
+                <BiddingInterface 
+                  onBidSelect={onBidSelect} 
+                  scenario={scenario}
+                />
               )}
 
               {showFeedback && auctionPhase === 'your_bid' && (
@@ -1041,6 +1167,8 @@
                   scenario={scenario}
                   selectedBid={selectedBid}
                   onContinueAuction={onContinueAuction}
+                  onNext={onNext}
+                  isLastScenario={isLastScenario}
                 />
               )}
 
@@ -1254,9 +1382,13 @@
             if (auctionPhase === 'your_bid') {
               return scenario.auction;
             } else {
-              // Show complete auction
+              // Show adapted auction if available
+              if (scenario.adapted_auction) {
+                return scenario.adapted_auction.bids;
+              }
+              
+              // Fallback to original method
               const completeAuction = [...scenario.auction];
-              // Replace the "?" with selected bid
               const yourTurnIndex = completeAuction.findIndex(b => b.bid === "?");
               if (yourTurnIndex !== -1) {
                 completeAuction[yourTurnIndex] = {
@@ -1265,7 +1397,6 @@
                   explanation: "Your bid"
                 };
               }
-              // Add remaining bids
               if (scenario.next_bids) {
                 completeAuction.push(...scenario.next_bids);
               }
@@ -1375,7 +1506,51 @@
           );
         };
 
-        const BiddingInterface = ({ onBidSelect }) => {
+        const BiddingInterface = ({ onBidSelect, scenario }) => {
+          const [lastBid, setLastBid] = useState(null);
+
+          // Get the last actual bid (not Pass, X, or XX) from the auction
+          React.useEffect(() => {
+            if (scenario) {
+              const bids = scenario.auction;
+              for (let i = bids.length - 1; i >= 0; i--) {
+                const bid = bids[i].bid;
+                if (bid !== 'Pass' && bid !== 'X' && bid !== 'XX' && bid !== '?') {
+                  setLastBid(bid);
+                  break;
+                }
+              }
+            }
+          }, [scenario]);
+
+          // Check if a bid is legal given the last bid
+          const isBidLegal = (bidValue) => {
+            // Pass is always legal
+            if (bidValue === 'Pass') return true;
+            
+            // Double and Redouble have special rules (simplified: allow them for now)
+            // In a real implementation, we'd check if there's been an opponent bid to double
+            if (bidValue === 'X' || bidValue === 'XX') return true;
+            
+            // If no previous bid, any suit bid is legal
+            if (!lastBid) return true;
+
+            // Convert bids to comparable values
+            const getBidValue = (b) => {
+              if (!b || b === 'Pass' || b === 'X' || b === 'XX' || b === '?') return -1;
+              const level = parseInt(b.charAt(0));
+              const suit = b.substring(1);
+              const suitOrder = { 'C': 0, 'D': 1, 'H': 2, 'S': 3, 'NT': 4 };
+              return level * 5 + (suitOrder[suit] !== undefined ? suitOrder[suit] : 0);
+            };
+
+            const currentValue = getBidValue(bidValue);
+            const lastValue = getBidValue(lastBid);
+            
+            // Bid must be higher than the last bid
+            return currentValue > lastValue;
+          };
+
           return (
             <div style={{
               background: 'rgba(255, 255, 255, 0.03)',
@@ -1402,6 +1577,7 @@
                     key={bid.value}
                     bid={bid}
                     onClick={() => onBidSelect(bid.value)}
+                    disabled={!isBidLegal(bid.value)}
                   />
                 ))}
               </div>
@@ -1409,7 +1585,7 @@
           );
         };
 
-        const BidButton = ({ bid, onClick }) => {
+        const BidButton = ({ bid, onClick, disabled = false }) => {
           const [isHovered, setIsHovered] = useState(false);
 
           const getColorScheme = (color) => {
@@ -1429,21 +1605,27 @@
 
           return (
             <button
-              onClick={onClick}
-              onMouseEnter={() => setIsHovered(true)}
+              onClick={disabled ? null : onClick}
+              onMouseEnter={() => !disabled && setIsHovered(true)}
               onMouseLeave={() => setIsHovered(false)}
+              disabled={disabled}
               style={{
-                background: isHovered ? colors.bg : 'rgba(255, 255, 255, 0.05)',
-                border: `2px solid ${isHovered ? colors.border : 'rgba(255, 255, 255, 0.1)'}`,
+                background: disabled 
+                  ? 'rgba(255, 255, 255, 0.02)' 
+                  : isHovered ? colors.bg : 'rgba(255, 255, 255, 0.05)',
+                border: `2px solid ${disabled 
+                  ? 'rgba(255, 255, 255, 0.05)' 
+                  : isHovered ? colors.border : 'rgba(255, 255, 255, 0.1)'}`,
                 borderRadius: '8px',
                 padding: '10px 6px',
                 fontSize: '16px',
                 fontWeight: '600',
-                color: colors.text,
-                cursor: 'pointer',
+                color: disabled ? 'rgba(255, 255, 255, 0.2)' : colors.text,
+                cursor: disabled ? 'not-allowed' : 'pointer',
                 transition: 'all 0.2s ease',
-                transform: isHovered ? 'translateY(-2px)' : 'translateY(0)',
-                boxShadow: isHovered ? `0 4px 12px ${colors.bg}` : 'none'
+                transform: !disabled && isHovered ? 'translateY(-2px)' : 'translateY(0)',
+                boxShadow: !disabled && isHovered ? `0 4px 12px ${colors.bg}` : 'none',
+                opacity: disabled ? 0.3 : 1
               }}
             >
               {bid.label}
@@ -2100,36 +2282,6 @@
         };
 
         // Utility functions
-        const getVulColor = (vul) => {
-          const colors = {
-            'None': { bg: 'rgba(148, 163, 184, 0.1)', border: 'rgba(148, 163, 184, 0.3)', text: '#94a3b8' },
-            'N/S': { bg: 'rgba(248, 113, 113, 0.1)', border: 'rgba(248, 113, 113, 0.3)', text: '#f87171' },
-            'E/W': { bg: 'rgba(248, 113, 113, 0.1)', border: 'rgba(248, 113, 113, 0.3)', text: '#f87171' },
-            'All': { bg: 'rgba(220, 38, 38, 0.2)', border: 'rgba(220, 38, 38, 0.4)', text: '#ef4444' }
-          };
-          return colors[vul] || colors['None'];
-        };
-
-        const getModuleColor = (module) => {
-          const colors = {
-            'BASIC': { bg: 'rgba(96, 165, 250, 0.1)', border: 'rgba(96, 165, 250, 0.3)', text: '#60a5fa' },
-            'COMPETE': { bg: 'rgba(251, 146, 60, 0.1)', border: 'rgba(251, 146, 60, 0.3)', text: '#fb923c' },
-            'DEFENSE': { bg: 'rgba(248, 113, 113, 0.1)', border: 'rgba(248, 113, 113, 0.3)', text: '#f87171' }
-          };
-          return colors[module] || colors['BASIC'];
-        };
-
-        const formatBid = (bid) => {
-          if (bid === 'Pass') return 'Pass';
-          if (bid === 'X') return 'X';
-          if (bid === 'XX') return 'XX';
-          if (bid === '?') return '?';
-          const suits = { C: '♣', D: '♦', H: '♥', S: '♠' };
-          const level = bid.charAt(0);
-          const suit = bid.substring(1);
-          return suit === 'NT' ? `${level}NT` : `${level}${suits[suit]}`;
-        };
-
         // Render app
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
