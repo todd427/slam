@@ -564,6 +564,175 @@
             { symbol: '♣', name: 'C', color: '#166534', bgColor: '#dcfce7', holding: hand.hand.C }
           ];
 
+          // Standard bridge table display with cross layout
+          const BridgeTable = () => {
+            const seatNum = parseInt(hand.seat.charAt(0)); // 1, 2, 3, or 4
+            
+            // Map seat numbers to compass positions
+            // Player is always South, rotate the table accordingly
+            const getPositionData = (compass) => {
+              const positions = ['S', 'W', 'N', 'E']; // Clockwise from South (player)
+              const seatIndex = positions.indexOf(compass);
+              const actualSeat = (seatIndex - seatNum + 1 + 4) % 4 + 1;
+              const isYou = actualSeat === seatNum;
+              const isDealer = actualSeat === 1;
+              
+              return {
+                compass,
+                seatLabel: actualSeat === 1 ? 'Dealer' : actualSeat === 2 ? '2nd' : actualSeat === 3 ? '3rd' : '4th',
+                isYou,
+                isDealer
+              };
+            };
+            
+            const north = getPositionData('N');
+            const south = getPositionData('S');
+            const west = getPositionData('W');
+            const east = getPositionData('E');
+            
+            const PositionBox = ({ data, style = {} }) => (
+              <div
+                style={{
+                  background: data.isYou ? 'rgba(74, 222, 128, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                  border: data.isYou ? '2px solid #4ade80' : '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '8px',
+                  padding: '12px 16px',
+                  textAlign: 'center',
+                  minWidth: '70px',
+                  ...style
+                }}
+              >
+                <div style={{ 
+                  fontSize: '20px', 
+                  fontWeight: '700', 
+                  marginBottom: '4px',
+                  color: data.isYou ? '#4ade80' : '#e8edf2'
+                }}>
+                  {data.compass}
+                </div>
+                <div style={{ 
+                  fontSize: '11px',
+                  color: data.isYou ? '#4ade80' : '#94a3b8'
+                }}>
+                  {data.seatLabel}
+                </div>
+                {data.isYou && (
+                  <div style={{ 
+                    fontSize: '10px', 
+                    marginTop: '4px', 
+                    fontWeight: '700',
+                    color: '#4ade80'
+                  }}>
+                    YOU
+                  </div>
+                )}
+              </div>
+            );
+            
+            return (
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '8px',
+                minWidth: '180px'
+              }}>
+                {/* North */}
+                <PositionBox data={north} />
+                
+                {/* West - Center - East */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  width: '100%',
+                  justifyContent: 'space-between'
+                }}>
+                  <PositionBox data={west} />
+                  <div style={{
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '50%',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '20px',
+                    flexShrink: 0
+                  }}>
+                    🃏
+                  </div>
+                  <PositionBox data={east} />
+                </div>
+                
+                {/* South */}
+                <PositionBox data={south} />
+              </div>
+            );
+          };
+
+          // Auction display - shows previous passes with compass positions
+          const AuctionDisplay = () => {
+            const seatNum = parseInt(hand.seat.charAt(0)); // 1, 2, 3, or 4
+            if (seatNum === 1) return null; // Dealer, no previous bids
+            
+            // Map to compass positions
+            const getPosition = (offset) => {
+              const positions = ['S', 'W', 'N', 'E'];
+              const index = (offset + seatNum - 1) % 4;
+              return positions[index];
+            };
+            
+            const passes = [];
+            for (let i = 0; i < seatNum - 1; i++) {
+              const seatLabel = i === 0 ? 'Dealer' : i === 1 ? '2nd' : '3rd';
+              const position = getPosition(i);
+              passes.push({ position, seatLabel });
+            }
+            
+            return (
+              <div style={{
+                background: 'rgba(148, 163, 184, 0.05)',
+                border: '1px solid rgba(148, 163, 184, 0.2)',
+                borderRadius: '12px',
+                padding: '16px',
+                marginBottom: '24px'
+              }}>
+                <div style={{
+                  fontSize: '12px',
+                  color: '#94a3b8',
+                  marginBottom: '8px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em'
+                }}>
+                  Auction So Far
+                </div>
+                <div style={{
+                  display: 'flex',
+                  gap: '12px',
+                  flexWrap: 'wrap'
+                }}>
+                  {passes.map((pass, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.05)',
+                        borderRadius: '6px',
+                        padding: '6px 12px',
+                        fontSize: '14px',
+                        color: '#cbd5e1',
+                        fontWeight: '500'
+                      }}
+                    >
+                      <span style={{ fontWeight: '700', color: '#94a3b8' }}>{pass.position}</span> ({pass.seatLabel}): Pass
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          };
+
           return (
             <div style={{
               background: 'linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)',
@@ -573,34 +742,53 @@
               backdropFilter: 'blur(10px)',
               boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
             }}>
+              {/* Auction So Far */}
+              <AuctionDisplay />
+              
               {/* Position & Vulnerability */}
               <div style={{
                 display: 'flex',
-                gap: '16px',
+                gap: '20px',
                 marginBottom: '24px',
-                flexWrap: 'wrap'
+                flexWrap: 'wrap',
+                alignItems: 'center'
               }}>
-                <div style={{
-                  background: 'rgba(74, 222, 128, 0.1)',
-                  border: '1px solid rgba(74, 222, 128, 0.3)',
-                  borderRadius: '8px',
-                  padding: '8px 16px',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  color: '#4ade80'
-                }}>
-                  Seat: {hand.seat}
+                <div>
+                  <div style={{
+                    fontSize: '12px',
+                    color: '#94a3b8',
+                    marginBottom: '8px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em'
+                  }}>
+                    Table Position
+                  </div>
+                  <BridgeTable />
                 </div>
                 <div style={{
                   background: getVulColor(hand.vul).bg,
                   border: `1px solid ${getVulColor(hand.vul).border}`,
                   borderRadius: '8px',
-                  padding: '8px 16px',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  color: getVulColor(hand.vul).text
+                  padding: '12px 20px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px'
                 }}>
-                  Vul: {hand.vul}
+                  <div style={{
+                    fontSize: '12px',
+                    color: '#94a3b8',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em'
+                  }}>
+                    Vulnerability
+                  </div>
+                  <div style={{
+                    fontSize: '16px',
+                    fontWeight: '700',
+                    color: getVulColor(hand.vul).text
+                  }}>
+                    {hand.vul}
+                  </div>
                 </div>
               </div>
 
