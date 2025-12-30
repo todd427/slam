@@ -1,0 +1,2138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SLAM Auction - Bridge Bidding Trainer</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            margin: 0;
+            font-family: 'DM Sans', -apple-system, sans-serif;
+        }
+        #root {
+            min-height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Lucide React icons as inline SVG components
+        const Shuffle = ({ size = 24 }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/>
+            </svg>
+        );
+
+        const ChevronRight = ({ size = 24 }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m9 18 6-6-6-6"/>
+            </svg>
+        );
+
+        const Trophy = ({ size = 24 }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
+                <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
+                <path d="M4 22h16"/>
+                <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/>
+                <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>
+                <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
+            </svg>
+        );
+
+        const Target = ({ size = 24 }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <circle cx="12" cy="12" r="6"/>
+                <circle cx="12" cy="12" r="2"/>
+            </svg>
+        );
+
+        const Filter = ({ size = 24 }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+            </svg>
+        );
+
+        const Home = ({ size = 24 }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                <polyline points="9 22 9 12 15 12 15 22"/>
+            </svg>
+        );
+
+        // Bidding scenarios data
+        const SCENARIOS = [
+          // UNCONTESTED AUCTIONS
+          {
+            id: "U01",
+            module: "BASIC",
+            title: "Stayman after 1NT",
+            dealer: "N",
+            vul: "None",
+            your_seat: "S",
+            your_hand: { S: "KJ84", H: "A963", D: "K72", C: "85" },
+            auction: [
+              { seat: "N", bid: "1NT", explanation: "15-17 HCP, balanced" },
+              { seat: "E", bid: "Pass" },
+              { seat: "S", bid: "?", explanation: "Your turn" }
+            ],
+            correct_bid: "2C",
+            alternatives: [],
+            explanation: [
+              "With 10 HCP and both majors, use Stayman (2♣) to find a 4-4 major fit.",
+              "If partner has a 4-card major, you'll reach 4♥ or 4♠. Otherwise, play 3NT."
+            ],
+            next_bids: [
+              { seat: "W", bid: "Pass" },
+              { seat: "N", bid: "2H", explanation: "Shows 4+ hearts" },
+              { seat: "E", bid: "Pass" },
+              { seat: "S", bid: "4H", explanation: "Game in 4-4 heart fit" },
+              { seat: "W", bid: "Pass" },
+              { seat: "N", bid: "Pass" },
+              { seat: "E", bid: "Pass" }
+            ],
+            final_contract: "4H by N",
+            contract_evaluation: "Perfect! Found the 4-4 heart fit and bid game."
+          },
+          {
+            id: "U02",
+            module: "BASIC",
+            title: "Jacoby Transfer",
+            dealer: "W",
+            vul: "N/S",
+            your_seat: "S",
+            your_hand: { S: "Q109764", H: "K5", D: "Q83", C: "72" },
+            auction: [
+              { seat: "W", bid: "Pass" },
+              { seat: "N", bid: "1NT", explanation: "15-17 HCP, balanced" },
+              { seat: "E", bid: "Pass" },
+              { seat: "S", bid: "?", explanation: "Your turn" }
+            ],
+            correct_bid: "2H",
+            alternatives: [],
+            explanation: [
+              "With 6+ spades, use Jacoby Transfer (2♥ asks partner to bid 2♠).",
+              "This gets the strong hand as declarer and lets you show spade length."
+            ],
+            next_bids: [
+              { seat: "W", bid: "Pass" },
+              { seat: "N", bid: "2S", explanation: "Accepts transfer" },
+              { seat: "E", bid: "Pass" },
+              { seat: "S", bid: "Pass", explanation: "Weak hand, stop in partscore" },
+              { seat: "W", bid: "Pass" }
+            ],
+            final_contract: "2S by N",
+            contract_evaluation: "Good! Transferred to get partner as declarer in the best partscore."
+          },
+          {
+            id: "U03",
+            module: "BASIC",
+            title: "2/1 Game Force",
+            dealer: "N",
+            vul: "E/W",
+            your_seat: "S",
+            your_hand: { S: "K4", H: "Q83", D: "AKJ72", C: "Q105" },
+            auction: [
+              { seat: "N", bid: "1S", explanation: "5+ spades, 12+ HCP" },
+              { seat: "E", bid: "Pass" },
+              { seat: "S", bid: "?", explanation: "Your turn" }
+            ],
+            correct_bid: "2D",
+            alternatives: ["1NT"],
+            explanation: [
+              "13 HCP with 5 diamonds = 2♦ (2-over-1, game forcing).",
+              "1NT is acceptable but 2♦ shows your strength and suit immediately."
+            ],
+            next_bids: [
+              { seat: "W", bid: "Pass" },
+              { seat: "N", bid: "2NT", explanation: "Balanced, no diamond fit" },
+              { seat: "E", bid: "Pass" },
+              { seat: "S", bid: "3NT", explanation: "Place the contract" },
+              { seat: "W", bid: "Pass" },
+              { seat: "N", bid: "Pass" },
+              { seat: "E", bid: "Pass" }
+            ],
+            final_contract: "3NT by S",
+            contract_evaluation: "Excellent! 2/1 auction got you to the right game."
+          },
+          {
+            id: "U04",
+            module: "BASIC",
+            title: "Simple Raise to Game",
+            dealer: "S",
+            vul: "All",
+            your_seat: "S",
+            your_hand: { S: "3", H: "KQ1084", D: "AJ72", C: "Q86" },
+            auction: [
+              { seat: "S", bid: "?", explanation: "Your turn" }
+            ],
+            correct_bid: "1H",
+            alternatives: [],
+            explanation: [
+              "13 HCP with 5-card major = standard 1♥ opening.",
+              "Show your longest suit first."
+            ],
+            next_bids: [
+              { seat: "W", bid: "Pass" },
+              { seat: "N", bid: "4H", explanation: "12-15 HCP, 4+ hearts, game values" },
+              { seat: "E", bid: "Pass" },
+              { seat: "S", bid: "Pass", explanation: "Accept game" },
+              { seat: "W", bid: "Pass" }
+            ],
+            final_contract: "4H by S",
+            contract_evaluation: "Perfect! Partner jumped to game with strong support."
+          },
+          {
+            id: "U05",
+            module: "BASIC",
+            title: "Invitational 2NT",
+            dealer: "E",
+            vul: "None",
+            your_seat: "S",
+            your_hand: { S: "AQ6", H: "K104", D: "Q972", C: "J83" },
+            auction: [
+              { seat: "E", bid: "Pass" },
+              { seat: "S", bid: "1NT", explanation: "15-17 HCP, balanced" },
+              { seat: "W", bid: "Pass" },
+              { seat: "N", bid: "2NT", explanation: "8-9 HCP, inviting game" },
+              { seat: "E", bid: "Pass" },
+              { seat: "S", bid: "?", explanation: "Your turn" }
+            ],
+            correct_bid: "3NT",
+            alternatives: [],
+            explanation: [
+              "Partner invites with 2NT (8-9 HCP). You have 16 HCP = maximum.",
+              "Accept the invitation and bid 3NT."
+            ],
+            next_bids: [],
+            final_contract: "3NT by S",
+            contract_evaluation: "Good! You accepted with maximum values for 1NT."
+          },
+
+          // COMPETITIVE BIDDING
+          {
+            id: "C01",
+            module: "COMPETE",
+            title: "Competing After Overcall",
+            dealer: "N",
+            vul: "None",
+            your_seat: "S",
+            your_hand: { S: "Q1084", H: "K72", D: "A653", C: "95" },
+            auction: [
+              { seat: "N", bid: "1H", explanation: "5+ hearts, 12+ HCP" },
+              { seat: "E", bid: "2C", explanation: "Overcall" },
+              { seat: "S", bid: "?", explanation: "Your turn" }
+            ],
+            correct_bid: "2H",
+            alternatives: [],
+            explanation: [
+              "9 HCP with 3-card heart support = compete with 2♥.",
+              "Don't let opponents steal the contract at the 2-level."
+            ],
+            next_bids: [
+              { seat: "W", bid: "Pass" },
+              { seat: "N", bid: "4H", explanation: "Game with extra values" },
+              { seat: "E", bid: "Pass" },
+              { seat: "S", bid: "Pass", explanation: "Accept game" },
+              { seat: "W", bid: "Pass" }
+            ],
+            final_contract: "4H by N",
+            contract_evaluation: "Great! Your competitive bid let partner show game values."
+          },
+          {
+            id: "C02",
+            module: "COMPETE",
+            title: "Negative Double",
+            dealer: "W",
+            vul: "N/S",
+            your_seat: "S",
+            your_hand: { S: "KJ84", H: "A1063", D: "72", C: "Q105" },
+            auction: [
+              { seat: "W", bid: "Pass" },
+              { seat: "N", bid: "1D", explanation: "3+ diamonds, 12+ HCP" },
+              { seat: "E", bid: "1S", explanation: "Overcall" },
+              { seat: "S", bid: "?", explanation: "Your turn" }
+            ],
+            correct_bid: "X",
+            alternatives: [],
+            explanation: [
+              "10 HCP with both unbid majors = negative double (X).",
+              "Shows 4+ hearts and tolerance for clubs, not a penalty double."
+            ],
+            next_bids: [
+              { seat: "W", bid: "Pass" },
+              { seat: "N", bid: "2H", explanation: "Shows 4 hearts" },
+              { seat: "E", bid: "Pass" },
+              { seat: "S", bid: "4H", explanation: "Game values found" },
+              { seat: "W", bid: "Pass" },
+              { seat: "N", bid: "Pass" },
+              { seat: "E", bid: "Pass" }
+            ],
+            final_contract: "4H by N",
+            contract_evaluation: "Perfect! Negative double found the 4-4 heart fit."
+          },
+          {
+            id: "C03",
+            module: "COMPETE",
+            title: "Competing Over Weak 2",
+            dealer: "E",
+            vul: "E/W",
+            your_seat: "S",
+            your_hand: { S: "AKJ4", H: "K3", D: "AQ1072", C: "84" },
+            auction: [
+              { seat: "E", bid: "2H", explanation: "Weak two: 6 hearts, 6-10 HCP" },
+              { seat: "S", bid: "?", explanation: "Your turn" }
+            ],
+            correct_bid: "X",
+            alternatives: ["3D"],
+            explanation: [
+              "15 HCP with takeout shape = double for takeout.",
+              "3♦ is possible but double is more flexible, letting partner choose."
+            ],
+            next_bids: [
+              { seat: "W", bid: "Pass" },
+              { seat: "N", bid: "3S", explanation: "5+ spades" },
+              { seat: "E", bid: "Pass" },
+              { seat: "S", bid: "4S", explanation: "Raise to game" },
+              { seat: "W", bid: "Pass" },
+              { seat: "N", bid: "Pass" },
+              { seat: "E", bid: "Pass" }
+            ],
+            final_contract: "4S by N",
+            contract_evaluation: "Excellent! Double found partner's spade suit."
+          },
+          {
+            id: "C04",
+            module: "COMPETE",
+            title: "Cue Bid After Overcall",
+            dealer: "S",
+            vul: "All",
+            your_seat: "S",
+            your_hand: { S: "Q1096", H: "K3", D: "AJ84", C: "A72" },
+            auction: [
+              { seat: "S", bid: "1D", explanation: "3+ diamonds, 12+ HCP" },
+              { seat: "W", bid: "1H", explanation: "Overcall" },
+              { seat: "N", bid: "1S", explanation: "4+ spades, 6+ HCP" },
+              { seat: "E", bid: "Pass" },
+              { seat: "S", bid: "?", explanation: "Your turn" }
+            ],
+            correct_bid: "2H",
+            alternatives: ["3S"],
+            explanation: [
+              "16 HCP with 4-card spade support = cue bid 2♥ (game forcing).",
+              "Shows spade support and game interest. 3♠ is acceptable but less forcing."
+            ],
+            next_bids: [
+              { seat: "W", bid: "Pass" },
+              { seat: "N", bid: "3S", explanation: "Shows extras" },
+              { seat: "E", bid: "Pass" },
+              { seat: "S", bid: "4S", explanation: "Place the contract" },
+              { seat: "W", bid: "Pass" },
+              { seat: "N", bid: "Pass" },
+              { seat: "E", bid: "Pass" }
+            ],
+            final_contract: "4S by N",
+            contract_evaluation: "Great! Cue bid ensured you reached game."
+          },
+          {
+            id: "C05",
+            module: "COMPETE",
+            title: "Balancing After Preempt",
+            dealer: "W",
+            vul: "None",
+            your_seat: "S",
+            your_hand: { S: "AQ74", H: "6", D: "KJ1083", C: "AQ5" },
+            auction: [
+              { seat: "W", bid: "3H", explanation: "Weak preempt" },
+              { seat: "N", bid: "Pass" },
+              { seat: "E", bid: "Pass" },
+              { seat: "S", bid: "?", explanation: "Your turn" }
+            ],
+            correct_bid: "X",
+            alternatives: ["3S"],
+            explanation: [
+              "15 HCP in balancing seat after 3♥ preempt = takeout double.",
+              "Partner likely has values. Don't let them steal it at 3♥."
+            ],
+            next_bids: [
+              { seat: "W", bid: "Pass" },
+              { seat: "N", bid: "3S", explanation: "Forced, 4 spades" },
+              { seat: "E", bid: "Pass" },
+              { seat: "S", bid: "4S", explanation: "Good spade fit" },
+              { seat: "W", bid: "Pass" },
+              { seat: "N", bid: "Pass" },
+              { seat: "E", bid: "Pass" }
+            ],
+            final_contract: "4S by N",
+            contract_evaluation: "Perfect! Balancing found game that would have been passed out."
+          },
+
+          // DEFENSIVE BIDDING
+          {
+            id: "D01",
+            module: "DEFENSE",
+            title: "Simple Overcall",
+            dealer: "E",
+            vul: "None",
+            your_seat: "S",
+            your_hand: { S: "KQJ1084", H: "73", D: "A65", C: "92" },
+            auction: [
+              { seat: "E", bid: "1C", explanation: "3+ clubs, 12+ HCP" },
+              { seat: "S", bid: "?", explanation: "Your turn" }
+            ],
+            correct_bid: "1S",
+            alternatives: [],
+            explanation: [
+              "10 HCP with excellent 6-card spade suit = overcall 1♠.",
+              "Good suit quality makes this safe even at favorable vulnerability."
+            ],
+            next_bids: [
+              { seat: "W", bid: "Pass" },
+              { seat: "N", bid: "4S", explanation: "Jump to game with fit" },
+              { seat: "E", bid: "Pass" },
+              { seat: "S", bid: "Pass", explanation: "Accept game" },
+              { seat: "W", bid: "Pass" }
+            ],
+            final_contract: "4S by S",
+            contract_evaluation: "Excellent! Overcall found partner's fit."
+          },
+          {
+            id: "D02",
+            module: "DEFENSE",
+            title: "Takeout Double",
+            dealer: "N",
+            vul: "N/S",
+            your_seat: "S",
+            your_hand: { S: "AJ84", H: "K1063", D: "7", C: "AQ95" },
+            auction: [
+              { seat: "N", bid: "Pass" },
+              { seat: "E", bid: "1D", explanation: "3+ diamonds, 12+ HCP" },
+              { seat: "S", bid: "?", explanation: "Your turn" }
+            ],
+            correct_bid: "X",
+            alternatives: [],
+            explanation: [
+              "14 HCP with support for all unbid suits = takeout double.",
+              "Perfect shape (4-4-1-4) and values for competing."
+            ],
+            next_bids: [
+              { seat: "W", bid: "Pass" },
+              { seat: "N", bid: "2H", explanation: "Shows 4+ hearts" },
+              { seat: "E", bid: "Pass" },
+              { seat: "S", bid: "4H", explanation: "Raise to game" },
+              { seat: "W", bid: "Pass" },
+              { seat: "N", bid: "Pass" },
+              { seat: "E", bid: "Pass" }
+            ],
+            final_contract: "4H by N",
+            contract_evaluation: "Perfect! Takeout double found the heart fit."
+          },
+          {
+            id: "D03",
+            module: "DEFENSE",
+            title: "Michaels Cue Bid",
+            dealer: "W",
+            vul: "E/W",
+            your_seat: "S",
+            your_hand: { S: "KQ1074", H: "AJ963", D: "8", C: "72" },
+            auction: [
+              { seat: "W", bid: "1D", explanation: "3+ diamonds, 12+ HCP" },
+              { seat: "N", bid: "Pass" },
+              { seat: "E", bid: "Pass" },
+              { seat: "S", bid: "?", explanation: "Your turn" }
+            ],
+            correct_bid: "2D",
+            alternatives: ["1S"],
+            explanation: [
+              "5-5 in the majors = Michaels cue bid (2♦).",
+              "Shows both majors and asks partner to choose. 1♠ is too limited."
+            ],
+            next_bids: [
+              { seat: "W", bid: "Pass" },
+              { seat: "N", bid: "2S", explanation: "Prefers spades" },
+              { seat: "E", bid: "Pass" },
+              { seat: "S", bid: "4S", explanation: "Good fit, bid game" },
+              { seat: "W", bid: "Pass" },
+              { seat: "N", bid: "Pass" },
+              { seat: "E", bid: "Pass" }
+            ],
+            final_contract: "4S by S",
+            contract_evaluation: "Great! Michaels showed both majors and found the fit."
+          },
+          {
+            id: "D04",
+            module: "DEFENSE",
+            title: "Unusual 2NT",
+            dealer: "N",
+            vul: "All",
+            your_seat: "S",
+            your_hand: { S: "8", H: "6", D: "KQJ1084", C: "AJ1072" },
+            auction: [
+              { seat: "N", bid: "Pass" },
+              { seat: "E", bid: "1S", explanation: "5+ spades, 12+ HCP" },
+              { seat: "S", bid: "?", explanation: "Your turn" }
+            ],
+            correct_bid: "2NT",
+            alternatives: [],
+            explanation: [
+              "5-5 in minors with 11 HCP = Unusual 2NT.",
+              "Shows diamonds and clubs, asks partner to choose."
+            ],
+            next_bids: [
+              { seat: "W", bid: "Pass" },
+              { seat: "N", bid: "3D", explanation: "Prefers diamonds" },
+              { seat: "E", bid: "Pass" },
+              { seat: "S", bid: "5D", explanation: "Push to game" },
+              { seat: "W", bid: "Pass" },
+              { seat: "N", bid: "Pass" },
+              { seat: "E", bid: "Pass" }
+            ],
+            final_contract: "5D by S",
+            contract_evaluation: "Bold but reasonable! Unusual 2NT showed your shape."
+          },
+          {
+            id: "D05",
+            module: "DEFENSE",
+            title: "Weak Jump Overcall",
+            dealer: "E",
+            vul: "None",
+            your_seat: "S",
+            your_hand: { S: "QJ109763", H: "84", D: "J5", C: "72" },
+            auction: [
+              { seat: "E", bid: "1H", explanation: "5+ hearts, 12+ HCP" },
+              { seat: "S", bid: "?", explanation: "Your turn" }
+            ],
+            correct_bid: "2S",
+            alternatives: ["3S"],
+            explanation: [
+              "7-card spade suit with weak hand = weak jump overcall (2♠).",
+              "Preemptive bid to disrupt opponents. 3♠ is more aggressive."
+            ],
+            next_bids: [
+              { seat: "W", bid: "Pass" },
+              { seat: "N", bid: "4S", explanation: "Has fitting values" },
+              { seat: "E", bid: "Pass" },
+              { seat: "S", bid: "Pass", explanation: "Accept game" },
+              { seat: "W", bid: "Pass" }
+            ],
+            final_contract: "4S by S",
+            contract_evaluation: "Good! Preemptive bid found partner's support."
+          }
+        ];
+
+        // Bid options for auction
+        const BID_OPTIONS = [
+          { label: 'Pass', value: 'Pass', color: 'gray' },
+          { label: 'X', value: 'X', color: 'double' },
+          { label: 'XX', value: 'XX', color: 'double' },
+          { label: '1♣', value: '1C', color: 'club' },
+          { label: '1♦', value: '1D', color: 'diamond' },
+          { label: '1♥', value: '1H', color: 'heart' },
+          { label: '1♠', value: '1S', color: 'spade' },
+          { label: '1NT', value: '1NT', color: 'nt' },
+          { label: '2♣', value: '2C', color: 'club' },
+          { label: '2♦', value: '2D', color: 'diamond' },
+          { label: '2♥', value: '2H', color: 'heart' },
+          { label: '2♠', value: '2S', color: 'spade' },
+          { label: '2NT', value: '2NT', color: 'nt' },
+          { label: '3♣', value: '3C', color: 'club' },
+          { label: '3♦', value: '3D', color: 'diamond' },
+          { label: '3♥', value: '3H', color: 'heart' },
+          { label: '3♠', value: '3S', color: 'spade' },
+          { label: '3NT', value: '3NT', color: 'nt' },
+          { label: '4♣', value: '4C', color: 'club' },
+          { label: '4♦', value: '4D', color: 'diamond' },
+          { label: '4♥', value: '4H', color: 'heart' },
+          { label: '4♠', value: '4S', color: 'spade' },
+          { label: '4NT', value: '4NT', color: 'nt' },
+          { label: '5♣', value: '5C', color: 'club' },
+          { label: '5♦', value: '5D', color: 'diamond' },
+          { label: '5♥', value: '5H', color: 'heart' },
+          { label: '5♠', value: '5S', color: 'spade' },
+          { label: '6♣', value: '6C', color: 'club' },
+          { label: '6♦', value: '6D', color: 'diamond' },
+          { label: '6♥', value: '6H', color: 'heart' },
+          { label: '6♠', value: '6S', color: 'spade' },
+          { label: '6NT', value: '6NT', color: 'nt' },
+          { label: '7♣', value: '7C', color: 'club' },
+          { label: '7♦', value: '7D', color: 'diamond' },
+          { label: '7♥', value: '7H', color: 'heart' },
+          { label: '7♠', value: '7S', color: 'spade' },
+          { label: '7NT', value: '7NT', color: 'nt' }
+        ];
+
+        const App = () => {
+          const [currentView, setCurrentView] = useState('home');
+          const [selectedModule, setSelectedModule] = useState('ALL');
+          
+          return (
+            <div style={{
+              minHeight: '100vh',
+              background: 'linear-gradient(135deg, #0f1419 0%, #1a2332 100%)',
+              color: '#e8edf2',
+              fontFamily: "'DM Sans', -apple-system, sans-serif"
+            }}>
+              {currentView === 'home' && <HomeView onNavigate={setCurrentView} selectedModule={selectedModule} setSelectedModule={setSelectedModule} />}
+              {currentView === 'play' && <PlayView onNavigate={setCurrentView} selectedModule={selectedModule} />}
+              {currentView === 'about' && <AboutView onNavigate={setCurrentView} />}
+            </div>
+          );
+        };
+
+        const HomeView = ({ onNavigate, selectedModule, setSelectedModule }) => {
+          const modules = [
+            { value: 'ALL', label: 'All Modules', count: SCENARIOS.length, color: '#4ade80' },
+            { value: 'BASIC', label: 'Uncontested', count: SCENARIOS.filter(s => s.module === 'BASIC').length, color: '#60a5fa' },
+            { value: 'COMPETE', label: 'Competitive', count: SCENARIOS.filter(s => s.module === 'COMPETE').length, color: '#fb923c' },
+            { value: 'DEFENSE', label: 'Defensive', count: SCENARIOS.filter(s => s.module === 'DEFENSE').length, color: '#f87171' }
+          ];
+
+          return (
+            <div style={{
+              maxWidth: '900px',
+              margin: '0 auto',
+              padding: '60px 24px',
+              textAlign: 'center'
+            }}>
+              <div style={{
+                marginBottom: '48px',
+                animation: 'fadeIn 0.8s ease-out'
+              }}>
+                <h1 style={{
+                  fontFamily: "'Playfair Display', Georgia, serif",
+                  fontSize: '72px',
+                  fontWeight: '700',
+                  margin: '0 0 8px 0',
+                  background: 'linear-gradient(135deg, #4ade80 0%, #22d3ee 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                  letterSpacing: '-0.02em'
+                }}>
+                  SLAM Auction
+                </h1>
+                <p style={{
+                  fontSize: '20px',
+                  color: '#94a3b8',
+                  margin: '0',
+                  fontWeight: '500',
+                  letterSpacing: '0.05em'
+                }}>
+                  Master Complete Bidding Sequences
+                </p>
+              </div>
+
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '16px',
+                padding: '40px 32px',
+                marginBottom: '32px',
+                textAlign: 'left',
+                backdropFilter: 'blur(10px)'
+              }}>
+                <h2 style={{
+                  fontFamily: "'Playfair Display', Georgia, serif",
+                  fontSize: '28px',
+                  margin: '0 0 20px 0',
+                  color: '#e8edf2'
+                }}>
+                  Practice Full Auctions
+                </h2>
+                <p style={{
+                  fontSize: '16px',
+                  lineHeight: '1.6',
+                  color: '#cbd5e1',
+                  margin: '0 0 24px 0'
+                }}>
+                  Learn complete bidding sequences from opening to final contract. Practice uncontested
+                  auctions, competitive bidding, and defensive techniques.
+                </p>
+
+                {/* Module selector */}
+                <div style={{
+                  marginBottom: '24px'
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    marginBottom: '16px',
+                    color: '#94a3b8',
+                    fontSize: '14px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em'
+                  }}>
+                    <Filter size={16} />
+                    Choose Module
+                  </div>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                    gap: '12px'
+                  }}>
+                    {modules.map(mod => (
+                      <button
+                        key={mod.value}
+                        onClick={() => setSelectedModule(mod.value)}
+                        style={{
+                          background: selectedModule === mod.value ? `${mod.color}20` : 'rgba(255, 255, 255, 0.05)',
+                          border: selectedModule === mod.value ? `2px solid ${mod.color}` : '1px solid rgba(255, 255, 255, 0.1)',
+                          borderRadius: '12px',
+                          padding: '16px',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                          textAlign: 'center'
+                        }}
+                        onMouseEnter={e => {
+                          if (selectedModule !== mod.value) {
+                            e.target.style.background = 'rgba(255, 255, 255, 0.08)';
+                          }
+                        }}
+                        onMouseLeave={e => {
+                          if (selectedModule !== mod.value) {
+                            e.target.style.background = 'rgba(255, 255, 255, 0.05)';
+                          }
+                        }}
+                      >
+                        <div style={{
+                          fontSize: '24px',
+                          fontWeight: '700',
+                          color: selectedModule === mod.value ? mod.color : '#e8edf2',
+                          marginBottom: '4px'
+                        }}>
+                          {mod.count}
+                        </div>
+                        <div style={{
+                          fontSize: '14px',
+                          fontWeight: '600',
+                          color: selectedModule === mod.value ? mod.color : '#94a3b8'
+                        }}>
+                          {mod.label}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                  gap: '16px',
+                  marginTop: '24px'
+                }}>
+                  {[
+                    { icon: <Target size={20} />, text: 'Full bidding sequences' },
+                    { icon: <Trophy size={20} />, text: 'Three training modules' },
+                    { icon: <Shuffle size={20} />, text: 'Competitive scenarios' }
+                  ].map((item, i) => (
+                    <div key={i} style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      color: '#4ade80'
+                    }}>
+                      {item.icon}
+                      <span style={{ color: '#e8edf2', fontSize: '14px' }}>{item.text}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                onClick={() => onNavigate('play')}
+                style={{
+                  background: 'linear-gradient(135deg, #4ade80 0%, #22d3ee 100%)',
+                  color: '#0f1419',
+                  border: 'none',
+                  borderRadius: '12px',
+                  padding: '18px 48px',
+                  fontSize: '18px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  marginBottom: '16px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  transition: 'all 0.3s ease',
+                  boxShadow: '0 8px 24px rgba(74, 222, 128, 0.3)'
+                }}
+                onMouseEnter={e => {
+                  e.target.style.transform = 'translateY(-2px)';
+                  e.target.style.boxShadow = '0 12px 32px rgba(74, 222, 128, 0.4)';
+                }}
+                onMouseLeave={e => {
+                  e.target.style.transform = 'translateY(0)';
+                  e.target.style.boxShadow = '0 8px 24px rgba(74, 222, 128, 0.3)';
+                }}
+              >
+                Start Practice Session
+                <ChevronRight size={20} />
+              </button>
+
+              <div style={{ marginTop: '24px' }}>
+                <button
+                  onClick={() => onNavigate('about')}
+                  style={{
+                    background: 'transparent',
+                    color: '#94a3b8',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    borderRadius: '8px',
+                    padding: '12px 24px',
+                    fontSize: '14px',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={e => {
+                    e.target.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+                    e.target.style.color = '#e8edf2';
+                  }}
+                  onMouseLeave={e => {
+                    e.target.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+                    e.target.style.color = '#94a3b8';
+                  }}
+                >
+                  About Modules & System
+                </button>
+              </div>
+
+              <style>{`
+                @keyframes fadeIn {
+                  from { opacity: 0; transform: translateY(20px); }
+                  to { opacity: 1; transform: translateY(0); }
+                }
+              `}</style>
+            </div>
+          );
+        };
+
+        const PlayView = ({ onNavigate, selectedModule }) => {
+          const [scenarios, setScenarios] = useState([]);
+          const [currentIndex, setCurrentIndex] = useState(0);
+          const [selectedBid, setSelectedBid] = useState(null);
+          const [score, setScore] = useState(0);
+          const [showFeedback, setShowFeedback] = useState(false);
+          const [sessionComplete, setSessionComplete] = useState(false);
+          const [scenarioResults, setScenarioResults] = useState([]);
+          const [auctionPhase, setAuctionPhase] = useState('your_bid'); // 'your_bid' or 'auction_complete'
+
+          useEffect(() => {
+            startNewSession();
+          }, []);
+
+          const startNewSession = () => {
+            let filtered = selectedModule === 'ALL' 
+              ? [...SCENARIOS] 
+              : SCENARIOS.filter(s => s.module === selectedModule);
+            const shuffled = filtered.sort(() => Math.random() - 0.5);
+            setScenarios(shuffled);
+            setCurrentIndex(0);
+            setScore(0);
+            setSelectedBid(null);
+            setShowFeedback(false);
+            setSessionComplete(false);
+            setScenarioResults([]);
+            setAuctionPhase('your_bid');
+          };
+
+          const currentScenario = scenarios[currentIndex];
+
+          const handleBidSelect = (bid) => {
+            if (showFeedback) return;
+            
+            setSelectedBid(bid);
+            setShowFeedback(true);
+
+            let points = 0;
+            let result = 'incorrect';
+            
+            if (bid === currentScenario.correct_bid) {
+              points = 3;
+              result = 'correct';
+            } else if (currentScenario.alternatives && currentScenario.alternatives.includes(bid)) {
+              points = 2;
+              result = 'close';
+            }
+
+            setScore(prev => prev + points);
+            setScenarioResults(prev => [...prev, { 
+              scenario: currentScenario.id, 
+              bid, 
+              points, 
+              result,
+              title: currentScenario.title 
+            }]);
+          };
+
+          const handleContinueAuction = () => {
+            setAuctionPhase('auction_complete');
+          };
+
+          const handleNext = () => {
+            if (currentIndex < scenarios.length - 1) {
+              setCurrentIndex(prev => prev + 1);
+              setSelectedBid(null);
+              setShowFeedback(false);
+              setAuctionPhase('your_bid');
+            } else {
+              setSessionComplete(true);
+            }
+          };
+
+          if (!currentScenario) return null;
+
+          if (sessionComplete) {
+            return <SessionSummary 
+              score={score} 
+              maxScore={scenarios.length * 3} 
+              results={scenarioResults} 
+              onRestart={startNewSession} 
+              onHome={() => onNavigate('home')} 
+            />;
+          }
+
+          return (
+            <div style={{
+              maxWidth: '1000px',
+              margin: '0 auto',
+              padding: '24px'
+            }}>
+              {/* Header */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '32px',
+                flexWrap: 'wrap',
+                gap: '16px'
+              }}>
+                <div>
+                  <h2 style={{
+                    fontFamily: "'Playfair Display', Georgia, serif",
+                    fontSize: '24px',
+                    margin: '0 0 4px 0'
+                  }}>
+                    Scenario {currentIndex + 1} of {scenarios.length}
+                  </h2>
+                  <div style={{
+                    fontSize: '14px',
+                    color: '#94a3b8'
+                  }}>
+                    Score: <span style={{ color: '#4ade80', fontWeight: '600', fontSize: '16px' }}>{score}</span> / {scenarios.length * 3}
+                  </div>
+                </div>
+                <button
+                  onClick={() => onNavigate('home')}
+                  style={{
+                    background: 'transparent',
+                    color: '#94a3b8',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    borderRadius: '8px',
+                    padding: '8px 16px',
+                    fontSize: '14px',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}
+                  onMouseEnter={e => e.target.style.borderColor = 'rgba(255, 255, 255, 0.3)'}
+                  onMouseLeave={e => e.target.style.borderColor = 'rgba(255, 255, 255, 0.15)'}
+                >
+                  <Home size={16} />
+                  Home
+                </button>
+              </div>
+
+              {/* Scenario Display */}
+              <ScenarioDisplay 
+                scenario={currentScenario}
+                onBidSelect={handleBidSelect}
+                selectedBid={selectedBid}
+                showFeedback={showFeedback}
+                auctionPhase={auctionPhase}
+                onContinueAuction={handleContinueAuction}
+                onNext={handleNext}
+                isLastScenario={currentIndex === scenarios.length - 1}
+              />
+            </div>
+          );
+        };
+
+        const ScenarioDisplay = ({ scenario, onBidSelect, selectedBid, showFeedback, auctionPhase, onContinueAuction, onNext, isLastScenario }) => {
+          return (
+            <div>
+              {/* Title and Module Badge */}
+              <div style={{
+                marginBottom: '24px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '16px',
+                flexWrap: 'wrap'
+              }}>
+                <h3 style={{
+                  fontFamily: "'Playfair Display', Georgia, serif",
+                  fontSize: '32px',
+                  margin: '0',
+                  color: '#e8edf2'
+                }}>
+                  {scenario.title}
+                </h3>
+                <span style={{
+                  background: getModuleColor(scenario.module).bg,
+                  color: getModuleColor(scenario.module).text,
+                  border: `1px solid ${getModuleColor(scenario.module).border}`,
+                  borderRadius: '6px',
+                  padding: '4px 12px',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em'
+                }}>
+                  {scenario.module === 'BASIC' ? 'Uncontested' : scenario.module === 'COMPETE' ? 'Competitive' : 'Defensive'}
+                </span>
+              </div>
+
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '24px',
+                marginBottom: '24px'
+              }}>
+                {/* Left: Bridge Table & Hand */}
+                <div>
+                  <BridgeTable scenario={scenario} />
+                  <HandDisplay hand={scenario.your_hand} />
+                </div>
+
+                {/* Right: Auction */}
+                <div>
+                  <AuctionDisplay 
+                    scenario={scenario} 
+                    auctionPhase={auctionPhase}
+                    selectedBid={selectedBid}
+                  />
+                </div>
+              </div>
+
+              {/* Bidding Interface or Feedback */}
+              {!showFeedback && auctionPhase === 'your_bid' && (
+                <BiddingInterface onBidSelect={onBidSelect} />
+              )}
+
+              {showFeedback && auctionPhase === 'your_bid' && (
+                <FeedbackPanel
+                  scenario={scenario}
+                  selectedBid={selectedBid}
+                  onContinueAuction={onContinueAuction}
+                />
+              )}
+
+              {auctionPhase === 'auction_complete' && (
+                <CompletedAuctionPanel
+                  scenario={scenario}
+                  onNext={onNext}
+                  isLastScenario={isLastScenario}
+                />
+              )}
+            </div>
+          );
+        };
+
+        const BridgeTable = ({ scenario }) => {
+          const seats = ['N', 'E', 'S', 'W'];
+          
+          const getSeatInfo = (compass) => {
+            // Determine who's dealer
+            const dealerMap = { N: 'N', E: 'E', S: 'S', W: 'W' };
+            const isDealer = scenario.dealer === compass;
+            const isYou = scenario.your_seat === compass;
+            
+            return { compass, isDealer, isYou };
+          };
+
+          const PositionBox = ({ compass, style = {} }) => {
+            const info = getSeatInfo(compass);
+            return (
+              <div
+                style={{
+                  background: info.isYou ? 'rgba(74, 222, 128, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                  border: info.isYou ? '2px solid #4ade80' : '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '8px',
+                  padding: '12px 16px',
+                  textAlign: 'center',
+                  minWidth: '70px',
+                  ...style
+                }}
+              >
+                <div style={{ 
+                  fontSize: '20px', 
+                  fontWeight: '700', 
+                  marginBottom: '4px',
+                  color: info.isYou ? '#4ade80' : '#e8edf2'
+                }}>
+                  {compass}
+                </div>
+                {info.isDealer && (
+                  <div style={{ 
+                    fontSize: '10px',
+                    color: info.isYou ? '#4ade80' : '#94a3b8',
+                    fontWeight: '600'
+                  }}>
+                    DEALER
+                  </div>
+                )}
+                {info.isYou && (
+                  <div style={{ 
+                    fontSize: '10px', 
+                    marginTop: '2px', 
+                    fontWeight: '700',
+                    color: '#4ade80'
+                  }}>
+                    YOU
+                  </div>
+                )}
+              </div>
+            );
+          };
+
+          return (
+            <div style={{
+              background: 'rgba(255, 255, 255, 0.03)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: '16px',
+              padding: '24px',
+              marginBottom: '16px'
+            }}>
+              <div style={{
+                fontSize: '12px',
+                color: '#94a3b8',
+                marginBottom: '16px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <span>Table Position</span>
+                <span style={{
+                  background: getVulColor(scenario.vul).bg,
+                  border: `1px solid ${getVulColor(scenario.vul).border}`,
+                  color: getVulColor(scenario.vul).text,
+                  borderRadius: '6px',
+                  padding: '4px 10px',
+                  fontSize: '11px',
+                  fontWeight: '600'
+                }}>
+                  Vul: {scenario.vul}
+                </span>
+              </div>
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <PositionBox compass="N" />
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  width: '100%',
+                  justifyContent: 'space-between'
+                }}>
+                  <PositionBox compass="W" />
+                  <div style={{
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '50%',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '20px',
+                    flexShrink: 0
+                  }}>
+                    🃏
+                  </div>
+                  <PositionBox compass="E" />
+                </div>
+                <PositionBox compass="S" />
+              </div>
+            </div>
+          );
+        };
+
+        const HandDisplay = ({ hand }) => {
+          const suits = [
+            { symbol: '♠', name: 'S', color: '#000', bgColor: '#e2e8f0', holding: hand.S },
+            { symbol: '♥', name: 'H', color: '#dc2626', bgColor: '#fee2e2', holding: hand.H },
+            { symbol: '♦', name: 'D', color: '#ea580c', bgColor: '#fed7aa', holding: hand.D },
+            { symbol: '♣', name: 'C', color: '#166534', bgColor: '#dcfce7', holding: hand.C }
+          ];
+
+          return (
+            <div style={{
+              background: 'rgba(255, 255, 255, 0.03)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: '16px',
+              padding: '20px'
+            }}>
+              <div style={{
+                fontSize: '12px',
+                color: '#94a3b8',
+                marginBottom: '12px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em'
+              }}>
+                Your Hand
+              </div>
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px'
+              }}>
+                {suits.map(suit => (
+                  <div
+                    key={suit.name}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px'
+                    }}
+                  >
+                    <div style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '6px',
+                      background: suit.bgColor,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '20px',
+                      color: suit.color,
+                      fontWeight: '700',
+                      flexShrink: 0
+                    }}>
+                      {suit.symbol}
+                    </div>
+                    <div style={{
+                      fontSize: '18px',
+                      fontWeight: '600',
+                      letterSpacing: '0.08em',
+                      color: '#e8edf2',
+                      fontFamily: "'DM Mono', monospace"
+                    }}>
+                      {suit.holding}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        };
+
+        const AuctionDisplay = ({ scenario, auctionPhase, selectedBid }) => {
+          const getFullAuction = () => {
+            if (auctionPhase === 'your_bid') {
+              return scenario.auction;
+            } else {
+              // Show complete auction
+              const completeAuction = [...scenario.auction];
+              // Replace the "?" with selected bid
+              const yourTurnIndex = completeAuction.findIndex(b => b.bid === "?");
+              if (yourTurnIndex !== -1) {
+                completeAuction[yourTurnIndex] = {
+                  ...completeAuction[yourTurnIndex],
+                  bid: selectedBid,
+                  explanation: "Your bid"
+                };
+              }
+              // Add remaining bids
+              if (scenario.next_bids) {
+                completeAuction.push(...scenario.next_bids);
+              }
+              return completeAuction;
+            }
+          };
+
+          const auction = getFullAuction();
+
+          return (
+            <div style={{
+              background: 'rgba(255, 255, 255, 0.03)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: '16px',
+              padding: '24px',
+              minHeight: '400px'
+            }}>
+              <div style={{
+                fontSize: '12px',
+                color: '#94a3b8',
+                marginBottom: '16px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em'
+              }}>
+                Auction {auctionPhase === 'auction_complete' && '(Complete)'}
+              </div>
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px'
+              }}>
+                {auction.map((bid, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      background: bid.seat === scenario.your_seat ? 'rgba(74, 222, 128, 0.1)' : 'rgba(255, 255, 255, 0.05)',
+                      border: `1px solid ${bid.seat === scenario.your_seat ? 'rgba(74, 222, 128, 0.3)' : 'rgba(255, 255, 255, 0.1)'}`,
+                      borderRadius: '8px',
+                      padding: '12px',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: '12px'
+                    }}
+                  >
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      flex: 1
+                    }}>
+                      <div style={{
+                        fontWeight: '700',
+                        color: bid.seat === scenario.your_seat ? '#4ade80' : '#94a3b8',
+                        minWidth: '24px'
+                      }}>
+                        {bid.seat}
+                      </div>
+                      <div style={{
+                        fontSize: '20px',
+                        fontWeight: '700',
+                        color: bid.bid === "?" ? '#fb923c' : '#e8edf2',
+                        minWidth: '60px'
+                      }}>
+                        {formatBid(bid.bid)}
+                      </div>
+                      {bid.explanation && (
+                        <div style={{
+                          fontSize: '13px',
+                          color: '#94a3b8',
+                          fontStyle: 'italic'
+                        }}>
+                          {bid.explanation}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {auctionPhase === 'auction_complete' && scenario.final_contract && (
+                <div style={{
+                  marginTop: '24px',
+                  padding: '16px',
+                  background: 'rgba(74, 222, 128, 0.1)',
+                  border: '1px solid rgba(74, 222, 128, 0.3)',
+                  borderRadius: '8px'
+                }}>
+                  <div style={{
+                    fontSize: '12px',
+                    color: '#94a3b8',
+                    marginBottom: '6px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em'
+                  }}>
+                    Final Contract
+                  </div>
+                  <div style={{
+                    fontSize: '24px',
+                    fontWeight: '700',
+                    color: '#4ade80'
+                  }}>
+                    {scenario.final_contract}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        };
+
+        const BiddingInterface = ({ onBidSelect }) => {
+          return (
+            <div style={{
+              background: 'rgba(255, 255, 255, 0.03)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: '16px',
+              padding: '24px'
+            }}>
+              <h3 style={{
+                margin: '0 0 20px 0',
+                fontSize: '18px',
+                fontWeight: '600',
+                textAlign: 'center',
+                color: '#cbd5e1'
+              }}>
+                What's your bid?
+              </h3>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(70px, 1fr))',
+                gap: '8px'
+              }}>
+                {BID_OPTIONS.map(bid => (
+                  <BidButton
+                    key={bid.value}
+                    bid={bid}
+                    onClick={() => onBidSelect(bid.value)}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        };
+
+        const BidButton = ({ bid, onClick }) => {
+          const [isHovered, setIsHovered] = useState(false);
+
+          const getColorScheme = (color) => {
+            const schemes = {
+              gray: { bg: 'rgba(148, 163, 184, 0.1)', border: 'rgba(148, 163, 184, 0.3)', text: '#cbd5e1' },
+              club: { bg: 'rgba(22, 101, 52, 0.2)', border: 'rgba(74, 222, 128, 0.4)', text: '#4ade80' },
+              diamond: { bg: 'rgba(234, 88, 12, 0.2)', border: 'rgba(251, 146, 60, 0.4)', text: '#fb923c' },
+              heart: { bg: 'rgba(220, 38, 38, 0.2)', border: 'rgba(248, 113, 113, 0.4)', text: '#f87171' },
+              spade: { bg: 'rgba(15, 20, 25, 0.4)', border: 'rgba(226, 232, 240, 0.4)', text: '#e2e8f0' },
+              nt: { bg: 'rgba(59, 130, 246, 0.2)', border: 'rgba(96, 165, 250, 0.4)', text: '#60a5fa' },
+              double: { bg: 'rgba(251, 146, 60, 0.2)', border: 'rgba(251, 146, 60, 0.4)', text: '#fb923c' }
+            };
+            return schemes[color] || schemes.gray;
+          };
+
+          const colors = getColorScheme(bid.color);
+
+          return (
+            <button
+              onClick={onClick}
+              onMouseEnter={() => setIsHovered(true)}
+              onMouseLeave={() => setIsHovered(false)}
+              style={{
+                background: isHovered ? colors.bg : 'rgba(255, 255, 255, 0.05)',
+                border: `2px solid ${isHovered ? colors.border : 'rgba(255, 255, 255, 0.1)'}`,
+                borderRadius: '8px',
+                padding: '10px 6px',
+                fontSize: '16px',
+                fontWeight: '600',
+                color: colors.text,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                transform: isHovered ? 'translateY(-2px)' : 'translateY(0)',
+                boxShadow: isHovered ? `0 4px 12px ${colors.bg}` : 'none'
+              }}
+            >
+              {bid.label}
+            </button>
+          );
+        };
+
+        const FeedbackPanel = ({ scenario, selectedBid, onContinueAuction }) => {
+          const isCorrect = selectedBid === scenario.correct_bid;
+          const isClose = scenario.alternatives && scenario.alternatives.includes(selectedBid);
+
+          const resultConfig = {
+            correct: {
+              title: '✓ Excellent!',
+              bg: 'rgba(74, 222, 128, 0.1)',
+              border: 'rgba(74, 222, 128, 0.3)',
+              color: '#4ade80',
+              points: 3
+            },
+            close: {
+              title: '~ Good Alternative',
+              bg: 'rgba(251, 146, 60, 0.1)',
+              border: 'rgba(251, 146, 60, 0.3)',
+              color: '#fb923c',
+              points: 2
+            },
+            incorrect: {
+              title: '✗ Not Recommended',
+              bg: 'rgba(248, 113, 113, 0.1)',
+              border: 'rgba(248, 113, 113, 0.3)',
+              color: '#f87171',
+              points: 0
+            }
+          };
+
+          const config = isCorrect ? resultConfig.correct : isClose ? resultConfig.close : resultConfig.incorrect;
+
+          return (
+            <div style={{
+              background: config.bg,
+              border: `2px solid ${config.border}`,
+              borderRadius: '16px',
+              padding: '32px',
+              animation: 'slideUp 0.3s ease-out'
+            }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                marginBottom: '24px',
+                flexWrap: 'wrap',
+                gap: '16px'
+              }}>
+                <div>
+                  <h3 style={{
+                    fontSize: '24px',
+                    fontWeight: '700',
+                    margin: '0 0 8px 0',
+                    color: config.color
+                  }}>
+                    {config.title}
+                  </h3>
+                  <div style={{
+                    fontSize: '16px',
+                    color: '#cbd5e1'
+                  }}>
+                    You bid: <span style={{ fontWeight: '600', color: '#e8edf2' }}>{formatBid(selectedBid)}</span>
+                    {!isCorrect && (
+                      <>
+                        {' · '}
+                        Best bid: <span style={{ fontWeight: '600', color: config.color }}>{formatBid(scenario.correct_bid)}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div style={{
+                  background: 'rgba(74, 222, 128, 0.2)',
+                  borderRadius: '8px',
+                  padding: '8px 16px',
+                  fontSize: '20px',
+                  fontWeight: '700',
+                  color: '#4ade80'
+                }}>
+                  +{config.points} pts
+                </div>
+              </div>
+
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.05)',
+                borderRadius: '12px',
+                padding: '20px',
+                marginBottom: '20px'
+              }}>
+                <h4 style={{
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  margin: '0 0 12px 0',
+                  color: '#94a3b8',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em'
+                }}>
+                  Explanation
+                </h4>
+                {scenario.explanation.map((point, i) => (
+                  <p key={i} style={{
+                    margin: '0 0 8px 0',
+                    fontSize: '15px',
+                    lineHeight: '1.6',
+                    color: '#e8edf2',
+                    paddingLeft: '16px',
+                    position: 'relative'
+                  }}>
+                    <span style={{
+                      position: 'absolute',
+                      left: '0',
+                      color: config.color
+                    }}>•</span>
+                    {point}
+                  </p>
+                ))}
+              </div>
+
+              {scenario.alternatives && scenario.alternatives.length > 0 && (
+                <div style={{
+                  fontSize: '14px',
+                  color: '#94a3b8',
+                  marginBottom: '20px'
+                }}>
+                  Alternative bids: {scenario.alternatives.map(alt => formatBid(alt)).join(', ')}
+                </div>
+              )}
+
+              <button
+                onClick={onContinueAuction}
+                style={{
+                  width: '100%',
+                  background: 'linear-gradient(135deg, #4ade80 0%, #22d3ee 100%)',
+                  color: '#0f1419',
+                  border: 'none',
+                  borderRadius: '12px',
+                  padding: '14px 24px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  transition: 'transform 0.2s ease'
+                }}
+                onMouseEnter={e => e.target.style.transform = 'translateY(-2px)'}
+                onMouseLeave={e => e.target.style.transform = 'translateY(0)'}
+              >
+                Continue Auction
+                <ChevronRight size={18} />
+              </button>
+
+              <style>{`
+                @keyframes slideUp {
+                  from {
+                    opacity: 0;
+                    transform: translateY(20px);
+                  }
+                  to {
+                    opacity: 1;
+                    transform: translateY(0);
+                  }
+                }
+              `}</style>
+            </div>
+          );
+        };
+
+        const CompletedAuctionPanel = ({ scenario, onNext, isLastScenario }) => {
+          return (
+            <div style={{
+              background: 'rgba(74, 222, 128, 0.1)',
+              border: '2px solid rgba(74, 222, 128, 0.3)',
+              borderRadius: '16px',
+              padding: '32px'
+            }}>
+              <h3 style={{
+                fontSize: '20px',
+                fontWeight: '700',
+                margin: '0 0 16px 0',
+                color: '#4ade80'
+              }}>
+                Auction Complete
+              </h3>
+              <p style={{
+                fontSize: '15px',
+                lineHeight: '1.6',
+                color: '#e8edf2',
+                margin: '0 0 24px 0'
+              }}>
+                {scenario.contract_evaluation}
+              </p>
+              <button
+                onClick={onNext}
+                style={{
+                  width: '100%',
+                  background: 'linear-gradient(135deg, #4ade80 0%, #22d3ee 100%)',
+                  color: '#0f1419',
+                  border: 'none',
+                  borderRadius: '12px',
+                  padding: '14px 24px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  transition: 'transform 0.2s ease'
+                }}
+                onMouseEnter={e => e.target.style.transform = 'translateY(-2px)'}
+                onMouseLeave={e => e.target.style.transform = 'translateY(0)'}
+              >
+                {isLastScenario ? 'View Summary' : 'Next Scenario'}
+                <ChevronRight size={18} />
+              </button>
+            </div>
+          );
+        };
+
+        const SessionSummary = ({ score, maxScore, results, onRestart, onHome }) => {
+          const percentage = Math.round((score / maxScore) * 100);
+          const correctCount = results.filter(r => r.result === 'correct').length;
+          const closeCount = results.filter(r => r.result === 'close').length;
+
+          const getMessage = () => {
+            if (percentage >= 90) return { title: 'Outstanding! 🏆', text: 'You\'ve mastered bidding sequences!' };
+            if (percentage >= 75) return { title: 'Excellent! 🎯', text: 'Strong auction skills!' };
+            if (percentage >= 60) return { title: 'Good Work! ✓', text: 'You\'re improving!' };
+            return { title: 'Keep Practicing! 📚', text: 'Every auction teaches something new!' };
+          };
+
+          const message = getMessage();
+
+          return (
+            <div style={{
+              maxWidth: '800px',
+              margin: '60px auto',
+              padding: '24px',
+              textAlign: 'center'
+            }}>
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(74, 222, 128, 0.1) 0%, rgba(34, 211, 238, 0.1) 100%)',
+                border: '2px solid rgba(74, 222, 128, 0.3)',
+                borderRadius: '20px',
+                padding: '48px 32px',
+                marginBottom: '32px'
+              }}>
+                <Trophy size={48} style={{ color: '#4ade80', marginBottom: '16px' }} />
+                <h2 style={{
+                  fontFamily: "'Playfair Display', Georgia, serif",
+                  fontSize: '36px',
+                  margin: '0 0 12px 0',
+                  color: '#e8edf2'
+                }}>
+                  {message.title}
+                </h2>
+                <p style={{
+                  fontSize: '18px',
+                  color: '#cbd5e1',
+                  margin: '0 0 32px 0'
+                }}>
+                  {message.text}
+                </p>
+
+                <div style={{
+                  display: 'inline-block',
+                  background: 'rgba(74, 222, 128, 0.2)',
+                  borderRadius: '16px',
+                  padding: '24px 48px',
+                  marginBottom: '24px'
+                }}>
+                  <div style={{
+                    fontSize: '56px',
+                    fontWeight: '700',
+                    color: '#4ade80',
+                    fontFamily: "'Playfair Display', Georgia, serif"
+                  }}>
+                    {score} / {maxScore}
+                  </div>
+                  <div style={{
+                    fontSize: '18px',
+                    color: '#94a3b8',
+                    marginTop: '4px'
+                  }}>
+                    {percentage}% correct
+                  </div>
+                </div>
+
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                  gap: '16px',
+                  marginTop: '24px'
+                }}>
+                  <div style={{
+                    background: 'rgba(74, 222, 128, 0.1)',
+                    borderRadius: '12px',
+                    padding: '16px'
+                  }}>
+                    <div style={{ fontSize: '24px', fontWeight: '700', color: '#4ade80' }}>
+                      {correctCount}
+                    </div>
+                    <div style={{ fontSize: '14px', color: '#94a3b8' }}>Perfect</div>
+                  </div>
+                  <div style={{
+                    background: 'rgba(251, 146, 60, 0.1)',
+                    borderRadius: '12px',
+                    padding: '16px'
+                  }}>
+                    <div style={{ fontSize: '24px', fontWeight: '700', color: '#fb923c' }}>
+                      {closeCount}
+                    </div>
+                    <div style={{ fontSize: '14px', color: '#94a3b8' }}>Close</div>
+                  </div>
+                  <div style={{
+                    background: 'rgba(248, 113, 113, 0.1)',
+                    borderRadius: '12px',
+                    padding: '16px'
+                  }}>
+                    <div style={{ fontSize: '24px', fontWeight: '700', color: '#f87171' }}>
+                      {results.length - correctCount - closeCount}
+                    </div>
+                    <div style={{ fontSize: '14px', color: '#94a3b8' }}>Missed</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Detailed Results */}
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '16px',
+                padding: '24px',
+                marginBottom: '32px',
+                textAlign: 'left'
+              }}>
+                <h3 style={{
+                  fontSize: '18px',
+                  fontWeight: '600',
+                  margin: '0 0 16px 0',
+                  color: '#e8edf2'
+                }}>
+                  Scenario Results
+                </h3>
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}>
+                  {results.map((result, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '12px',
+                        background: 'rgba(255, 255, 255, 0.05)',
+                        borderRadius: '8px'
+                      }}
+                    >
+                      <span style={{ color: '#cbd5e1', fontSize: '14px' }}>
+                        {idx + 1}. {result.title}
+                      </span>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px'
+                      }}>
+                        <span style={{ 
+                          color: result.result === 'correct' ? '#4ade80' : result.result === 'close' ? '#fb923c' : '#f87171',
+                          fontSize: '14px',
+                          fontWeight: '600'
+                        }}>
+                          {result.result === 'correct' ? '✓' : result.result === 'close' ? '~' : '✗'}
+                        </span>
+                        <span style={{
+                          color: '#94a3b8',
+                          fontSize: '14px'
+                        }}>
+                          {result.points} pts
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{
+                display: 'flex',
+                gap: '12px',
+                flexWrap: 'wrap',
+                justifyContent: 'center'
+              }}>
+                <button
+                  onClick={onRestart}
+                  style={{
+                    flex: '1',
+                    minWidth: '200px',
+                    background: 'linear-gradient(135deg, #4ade80 0%, #22d3ee 100%)',
+                    color: '#0f1419',
+                    border: 'none',
+                    borderRadius: '12px',
+                    padding: '16px 32px',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    transition: 'transform 0.2s ease'
+                  }}
+                  onMouseEnter={e => e.target.style.transform = 'translateY(-2px)'}
+                  onMouseLeave={e => e.target.style.transform = 'translateY(0)'}
+                >
+                  <Shuffle size={18} />
+                  New Session
+                </button>
+                <button
+                  onClick={onHome}
+                  style={{
+                    flex: '1',
+                    minWidth: '200px',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    color: '#e8edf2',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    borderRadius: '12px',
+                    padding: '16px 32px',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={e => {
+                    e.target.style.background = 'rgba(255, 255, 255, 0.08)';
+                    e.target.style.borderColor = 'rgba(255, 255, 255, 0.25)';
+                  }}
+                  onMouseLeave={e => {
+                    e.target.style.background = 'rgba(255, 255, 255, 0.05)';
+                    e.target.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+                  }}
+                >
+                  Back to Home
+                </button>
+              </div>
+            </div>
+          );
+        };
+
+        const AboutView = ({ onNavigate }) => {
+          return (
+            <div style={{
+              maxWidth: '800px',
+              margin: '0 auto',
+              padding: '60px 24px'
+            }}>
+              <button
+                onClick={() => onNavigate('home')}
+                style={{
+                  background: 'transparent',
+                  color: '#94a3b8',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  borderRadius: '8px',
+                  padding: '8px 16px',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  marginBottom: '32px',
+                  transition: 'all 0.2s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+                onMouseEnter={e => e.target.style.borderColor = 'rgba(255, 255, 255, 0.3)'}
+                onMouseLeave={e => e.target.style.borderColor = 'rgba(255, 255, 255, 0.15)'}
+              >
+                ← Back
+              </button>
+
+              <h1 style={{
+                fontFamily: "'Playfair Display', Georgia, serif",
+                fontSize: '48px',
+                margin: '0 0 16px 0',
+                background: 'linear-gradient(135deg, #4ade80 0%, #22d3ee 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text'
+              }}>
+                About SLAM Auction
+              </h1>
+
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '16px',
+                padding: '32px',
+                marginBottom: '24px',
+                lineHeight: '1.8'
+              }}>
+                <h2 style={{
+                  fontFamily: "'Playfair Display', Georgia, serif",
+                  fontSize: '28px',
+                  margin: '0 0 16px 0',
+                  color: '#e8edf2'
+                }}>
+                  Training Modules
+                </h2>
+                
+                <div style={{ marginBottom: '24px' }}>
+                  <h3 style={{ 
+                    color: '#60a5fa', 
+                    fontSize: '20px', 
+                    margin: '0 0 8px 0' 
+                  }}>
+                    UNCONTESTED - Basic Auctions
+                  </h3>
+                  <p style={{ margin: '0 0 12px 0', color: '#cbd5e1' }}>
+                    Learn standard bidding sequences without opponent interference. Practice:
+                  </p>
+                  <ul style={{ margin: '0', paddingLeft: '24px', color: '#cbd5e1' }}>
+                    <li>Stayman and Jacoby Transfers after 1NT</li>
+                    <li>2/1 Game Forcing sequences</li>
+                    <li>Simple raises and invitations</li>
+                    <li>Rebids by opener and responder</li>
+                  </ul>
+                </div>
+
+                <div style={{ marginBottom: '24px' }}>
+                  <h3 style={{ 
+                    color: '#fb923c', 
+                    fontSize: '20px', 
+                    margin: '0 0 8px 0' 
+                  }}>
+                    COMPETITIVE - Contested Auctions
+                  </h3>
+                  <p style={{ margin: '0 0 12px 0', color: '#cbd5e1' }}>
+                    Deal with opponent interference. Practice:
+                  </p>
+                  <ul style={{ margin: '0', paddingLeft: '24px', color: '#cbd5e1' }}>
+                    <li>Negative doubles</li>
+                    <li>Competing after overcalls</li>
+                    <li>Cue bids showing support</li>
+                    <li>Balancing decisions</li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h3 style={{ 
+                    color: '#f87171', 
+                    fontSize: '20px', 
+                    margin: '0 0 8px 0' 
+                  }}>
+                    DEFENSIVE - Your Side Competes
+                  </h3>
+                  <p style={{ margin: '0 0 12px 0', color: '#cbd5e1' }}>
+                    Enter the auction after opponents open. Practice:
+                  </p>
+                  <ul style={{ margin: '0', paddingLeft: '24px', color: '#cbd5e1' }}>
+                    <li>Simple overcalls</li>
+                    <li>Takeout doubles</li>
+                    <li>Michaels Cue Bid (5-5 majors)</li>
+                    <li>Unusual 2NT (5-5 minors)</li>
+                    <li>Weak jump overcalls</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '16px',
+                padding: '32px',
+                marginBottom: '24px',
+                lineHeight: '1.8'
+              }}>
+                <h2 style={{
+                  fontFamily: "'Playfair Display', Georgia, serif",
+                  fontSize: '28px',
+                  margin: '0 0 16px 0',
+                  color: '#e8edf2'
+                }}>
+                  Scoring System
+                </h2>
+                <div style={{
+                  display: 'grid',
+                  gap: '12px'
+                }}>
+                  <div style={{
+                    background: 'rgba(74, 222, 128, 0.1)',
+                    border: '1px solid rgba(74, 222, 128, 0.3)',
+                    borderRadius: '8px',
+                    padding: '12px 16px'
+                  }}>
+                    <strong style={{ color: '#4ade80' }}>3 points:</strong> Best bid - perfect choice
+                  </div>
+                  <div style={{
+                    background: 'rgba(251, 146, 60, 0.1)',
+                    border: '1px solid rgba(251, 146, 60, 0.3)',
+                    borderRadius: '8px',
+                    padding: '12px 16px'
+                  }}>
+                    <strong style={{ color: '#fb923c' }}>2 points:</strong> Acceptable alternative
+                  </div>
+                  <div style={{
+                    background: 'rgba(248, 113, 113, 0.1)',
+                    border: '1px solid rgba(248, 113, 113, 0.3)',
+                    borderRadius: '8px',
+                    padding: '12px 16px'
+                  }}>
+                    <strong style={{ color: '#f87171' }}>0 points:</strong> Not recommended
+                  </div>
+                </div>
+              </div>
+
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '16px',
+                padding: '32px',
+                lineHeight: '1.8'
+              }}>
+                <h2 style={{
+                  fontFamily: "'Playfair Display', Georgia, serif",
+                  fontSize: '28px',
+                  margin: '0 0 16px 0',
+                  color: '#e8edf2'
+                }}>
+                  Bidding System
+                </h2>
+                <p style={{ margin: '0 0 16px 0', color: '#cbd5e1' }}>
+                  SLAM Auction uses Standard American conventions:
+                </p>
+                <ul style={{
+                  margin: '0',
+                  paddingLeft: '24px',
+                  color: '#cbd5e1'
+                }}>
+                  <li style={{ marginBottom: '8px' }}>5-card majors</li>
+                  <li style={{ marginBottom: '8px' }}>1NT = 15–17 HCP balanced</li>
+                  <li style={{ marginBottom: '8px' }}>2/1 Game Forcing</li>
+                  <li style={{ marginBottom: '8px' }}>Stayman and Jacoby Transfers</li>
+                  <li style={{ marginBottom: '8px' }}>Negative doubles through 2♠</li>
+                  <li style={{ marginBottom: '8px' }}>Michaels and Unusual 2NT</li>
+                </ul>
+              </div>
+            </div>
+          );
+        };
+
+        // Utility functions
+        const getVulColor = (vul) => {
+          const colors = {
+            'None': { bg: 'rgba(148, 163, 184, 0.1)', border: 'rgba(148, 163, 184, 0.3)', text: '#94a3b8' },
+            'N/S': { bg: 'rgba(248, 113, 113, 0.1)', border: 'rgba(248, 113, 113, 0.3)', text: '#f87171' },
+            'E/W': { bg: 'rgba(248, 113, 113, 0.1)', border: 'rgba(248, 113, 113, 0.3)', text: '#f87171' },
+            'All': { bg: 'rgba(220, 38, 38, 0.2)', border: 'rgba(220, 38, 38, 0.4)', text: '#ef4444' }
+          };
+          return colors[vul] || colors['None'];
+        };
+
+        const getModuleColor = (module) => {
+          const colors = {
+            'BASIC': { bg: 'rgba(96, 165, 250, 0.1)', border: 'rgba(96, 165, 250, 0.3)', text: '#60a5fa' },
+            'COMPETE': { bg: 'rgba(251, 146, 60, 0.1)', border: 'rgba(251, 146, 60, 0.3)', text: '#fb923c' },
+            'DEFENSE': { bg: 'rgba(248, 113, 113, 0.1)', border: 'rgba(248, 113, 113, 0.3)', text: '#f87171' }
+          };
+          return colors[module] || colors['BASIC'];
+        };
+
+        const formatBid = (bid) => {
+          if (bid === 'Pass') return 'Pass';
+          if (bid === 'X') return 'X';
+          if (bid === 'XX') return 'XX';
+          if (bid === '?') return '?';
+          const suits = { C: '♣', D: '♦', H: '♥', S: '♠' };
+          const level = bid.charAt(0);
+          const suit = bid.substring(1);
+          return suit === 'NT' ? `${level}NT` : `${level}${suits[suit]}`;
+        };
+
+        // Render app
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
