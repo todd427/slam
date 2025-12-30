@@ -860,47 +860,100 @@
           return seats[(idx + 1) % 4];
         };
 
-        const generatePartnerResponse = (scenario, userBid) => {
-          // Simplified partner logic
-          let bids = [];
-          let final_contract = `${formatBid(userBid)} by ${scenario.your_seat}`;
-          let evaluation = "Auction completed.";
+        const generatePartnerResponse = async (scenario, userBid) => {
+          // Check if this is the correct or alternative bid - use scripted response for speed
+          const isCorrectBid = userBid === scenario.correct_bid;
+          const isAlternativeBid = scenario.alternatives && scenario.alternatives.includes(userBid);
           
-          // Check if this is the correct or alternative bid - use scripted response
-          if (userBid === scenario.correct_bid || (scenario.alternatives && scenario.alternatives.includes(userBid))) {
-            // Use the pre-scripted continuation
+          if (isCorrectBid || isAlternativeBid) {
+            // Use the pre-scripted continuation - this was designed for this specific bid
             if (scenario.next_bids && scenario.next_bids.length > 0) {
-              bids = scenario.next_bids;
-              final_contract = scenario.final_contract;
-              evaluation = scenario.contract_evaluation;
-            } else {
-              bids = [
-                { seat: getNextSeat(scenario.your_seat), bid: "Pass" },
-                { seat: getNextSeat(getNextSeat(scenario.your_seat)), bid: "Pass" },
-                { seat: getNextSeat(getNextSeat(getNextSeat(scenario.your_seat))), bid: "Pass" }
-              ];
+              return {
+                bids: scenario.next_bids,
+                final_contract: scenario.final_contract,
+                evaluation: scenario.contract_evaluation
+              };
             }
-          } else {
-            // Generate a simple response for non-optimal bids
-            const seats = ['N', 'E', 'S', 'W'];
-            const yourIdx = seats.indexOf(scenario.your_seat);
-            const nextSeat = seats[(yourIdx + 1) % 4];
-            const partnerSeat = seats[(yourIdx + 2) % 4];
-            const lastSeat = seats[(yourIdx + 3) % 4];
-            
-            bids = [
-              { seat: nextSeat, bid: "Pass", explanation: "" },
-              { seat: partnerSeat, bid: "Pass", explanation: "" },
-              { seat: lastSeat, bid: "Pass", explanation: "" }
-            ];
-            
-            evaluation = `You bid ${formatBid(userBid)}. While legal, the optimal bid was ${formatBid(scenario.correct_bid)}. The auction ended in ${final_contract}.`;
           }
           
-          return { bids, final_contract, evaluation };
+          // For non-optimal bids, use Claude to generate intelligent responses
+          try {
+            const auctionSoFar = scenario.auction.map(b => `${b.seat}: ${b.bid}`).join(', ');
+            const handStr = `Spades: ${scenario.your_hand.S}, Hearts: ${scenario.your_hand.H}, Diamonds: ${scenario.your_hand.D}, Clubs: ${scenario.your_hand.C}`;
+            
+            const prompt = `You are playing bridge. Here's the situation:
+
+**Auction so far:** ${auctionSoFar}
+**Your seat:** ${scenario.your_seat}
+**Your hand:** ${handStr}
+**You just bid:** ${formatBid(userBid)}
+**Vulnerability:** ${scenario.vul}
+**Dealer:** ${scenario.dealer}
+
+The recommended bid was ${formatBid(scenario.correct_bid)}, but you bid ${formatBid(userBid)} instead.
+
+Generate the remaining auction. Respond ONLY with valid JSON in this exact format (no markdown, no explanation):
+{
+  "bids": [
+    {"seat": "W", "bid": "Pass", "explanation": "reason"},
+    {"seat": "N", "bid": "3NT", "explanation": "reason"},
+    {"seat": "E", "bid": "Pass", "explanation": ""},
+    {"seat": "S", "bid": "Pass", "explanation": ""}
+  ],
+  "final_contract": "3NT by N",
+  "evaluation": "Brief evaluation of the auction result"
+}
+
+Rules:
+- Generate bids for the next 3 players in order
+- Bids must be legal (higher than previous bid or Pass)
+- The auction ends with 3 consecutive passes
+- Keep explanations very brief (5-10 words max)
+- Be realistic about what partner/opponents would do given the actual auction`;
+
+            const response = await fetch("https://api.anthropic.com/v1/messages", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                model: "claude-sonnet-4-20250514",
+                max_tokens: 1000,
+                messages: [
+                  { role: "user", content: prompt }
+                ],
+              })
+            });
+
+            const data = await response.json();
+            const textContent = data.content.find(c => c.type === "text")?.text || "";
+            
+            // Parse the JSON response
+            const cleaned = textContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            const result = JSON.parse(cleaned);
+            
+            return result;
+            
+          } catch (error) {
+            console.error('Error calling Claude API:', error);
+            
+            // Fallback: everyone passes
+            const seats = ['N', 'E', 'S', 'W'];
+            const yourIdx = seats.indexOf(scenario.your_seat);
+            
+            return {
+              bids: [
+                { seat: seats[(yourIdx + 1) % 4], bid: "Pass", explanation: "" },
+                { seat: seats[(yourIdx + 2) % 4], bid: "Pass", explanation: "" },
+                { seat: seats[(yourIdx + 3) % 4], bid: "Pass", explanation: "" }
+              ],
+              final_contract: `${formatBid(userBid)} by ${scenario.your_seat}`,
+              evaluation: `You bid ${formatBid(userBid)}. The recommended bid was ${formatBid(scenario.correct_bid)}.`
+            };
+          }
         };
 
-        const generateAdaptedAuction = (scenario, userBid) => {
+        const generateAdaptedAuction = async (scenario, userBid) => {
           const auction = [...scenario.auction];
           
           // Replace the "?" with user's actual bid
@@ -913,8 +966,8 @@
             };
           }
           
-          // Generate partner responses
-          const continuation = generatePartnerResponse(scenario, userBid);
+          // Generate partner responses (now async!)
+          const continuation = await generatePartnerResponse(scenario, userBid);
           
           return {
             bids: [...auction, ...continuation.bids],
@@ -981,10 +1034,12 @@
             }]);
           };
 
-          const handleContinueAuction = () => {
+          const handleContinueAuction = async () => {
             try {
-              // Generate partner's response based on YOUR actual bid
-              const adaptedAuction = generateAdaptedAuction(currentScenario, selectedBid);
+              setAuctionPhase('loading'); // Show loading indicator
+              
+              // Generate partner's response based on YOUR actual bid (now async!)
+              const adaptedAuction = await generateAdaptedAuction(currentScenario, selectedBid);
               
               // Update the scenario with the adapted auction
               const updatedScenario = {
@@ -1170,6 +1225,31 @@
                   onNext={onNext}
                   isLastScenario={isLastScenario}
                 />
+              )}
+
+              {auctionPhase === 'loading' && (
+                <div style={{
+                  background: 'rgba(34, 211, 238, 0.1)',
+                  border: '2px solid rgba(34, 211, 238, 0.3)',
+                  borderRadius: '16px',
+                  padding: '32px',
+                  textAlign: 'center'
+                }}>
+                  <div style={{
+                    fontSize: '20px',
+                    fontWeight: '600',
+                    color: '#22d3ee',
+                    marginBottom: '12px'
+                  }}>
+                    🤔 Claude is thinking...
+                  </div>
+                  <div style={{
+                    fontSize: '14px',
+                    color: '#94a3b8'
+                  }}>
+                    Generating intelligent partner response to your bid
+                  </div>
+                </div>
               )}
 
               {auctionPhase === 'auction_complete' && (
