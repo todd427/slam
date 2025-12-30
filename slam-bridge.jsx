@@ -1,0 +1,1208 @@
+import React, { useState, useEffect } from 'react';
+import { Shuffle, RotateCcw, ChevronRight, Trophy, Target } from 'lucide-react';
+
+// Hand data - 10 curated opening bid scenarios
+const HANDS_DATA = [
+  {
+    id: "H01",
+    seat: "1st",
+    vul: "None",
+    hand: { S: "AK74", H: "QJ8", D: "KJ72", C: "94" },
+    best_open: "1NT",
+    alts: ["1D"],
+    explain: [
+      "15–17 balanced with stoppers in all suits.",
+      "1NT shows strength + shape immediately and limits your hand."
+    ]
+  },
+  {
+    id: "H02",
+    seat: "2nd",
+    vul: "N/S",
+    hand: { S: "6", H: "AKJ1084", D: "Q53", C: "K72" },
+    best_open: "1H",
+    alts: [],
+    explain: [
+      "6-card major with 13 HCP opens 1H.",
+      "Show your longest suit first, even with 6 cards."
+    ]
+  },
+  {
+    id: "H03",
+    seat: "3rd",
+    vul: "E/W",
+    hand: { S: "QJ109742", H: "8", D: "Q6", C: "854" },
+    best_open: "3S",
+    alts: ["2S"],
+    explain: [
+      "7-card suit with limited values = preempt at 3-level.",
+      "In 3rd seat after two passes, this blocks opponents' bidding space."
+    ]
+  },
+  {
+    id: "H04",
+    seat: "1st",
+    vul: "All",
+    hand: { S: "AKQ4", H: "AKJ2", D: "AQ8", C: "K7" },
+    best_open: "2C",
+    alts: [],
+    explain: [
+      "25+ HCP with strong hand = 2♣ (artificial, forcing).",
+      "Too strong for 1-level opening; 2♣ forces partner to respond."
+    ]
+  },
+  {
+    id: "H05",
+    seat: "4th",
+    vul: "None",
+    hand: { S: "K873", H: "Q2", D: "AJ94", C: "K108" },
+    best_open: "Pass",
+    alts: [],
+    explain: [
+      "11 HCP and balanced = not quite enough to open.",
+      "In 4th seat after 3 passes, need 12+ or Rule of 15."
+    ]
+  },
+  {
+    id: "H06",
+    seat: "1st",
+    vul: "N/S",
+    hand: { S: "Q4", H: "A7", D: "KQJ1083", C: "A92" },
+    best_open: "1D",
+    alts: [],
+    explain: [
+      "14 HCP with 6-card minor opens at 1-level.",
+      "Not strong enough for 3NT; start with 1♦ to explore game."
+    ]
+  },
+  {
+    id: "H07",
+    seat: "2nd",
+    vul: "E/W",
+    hand: { S: "AJ985", H: "KQ1072", D: "4", C: "A6" },
+    best_open: "1S",
+    alts: ["1H"],
+    explain: [
+      "With 5-5 in majors, open the higher ranking (spades).",
+      "1♥ is acceptable but 1♠ is standard with equal length majors."
+    ]
+  },
+  {
+    id: "H08",
+    seat: "3rd",
+    vul: "All",
+    hand: { S: "5", H: "K2", D: "AKQ842", C: "J1095" },
+    best_open: "1D",
+    alts: [],
+    explain: [
+      "Good 6-card diamond suit with 13 HCP opens 1♦.",
+      "Not balanced enough for NT; show your longest suit."
+    ]
+  },
+  {
+    id: "H09",
+    seat: "1st",
+    vul: "None",
+    hand: { S: "KJ8", H: "AQ6", D: "K1094", C: "Q73" },
+    best_open: "1NT",
+    alts: ["1D"],
+    explain: [
+      "15 HCP balanced with 4-3-3-3 shape = classic 1NT.",
+      "Perfect hand to show everything in one bid."
+    ]
+  },
+  {
+    id: "H10",
+    seat: "2nd",
+    vul: "All",
+    hand: { S: "A3", H: "KQ87542", D: "J6", C: "94" },
+    best_open: "2H",
+    alts: ["3H"],
+    explain: [
+      "7-card major with 6-10 HCP = weak two bid.",
+      "Shows a good suit with limited high cards. 3♥ is possible but 2♥ is standard."
+    ]
+  }
+];
+
+// Bid buttons configuration
+const BID_OPTIONS = [
+  { label: 'Pass', value: 'Pass', color: 'gray' },
+  { label: '1♣', value: '1C', color: 'club' },
+  { label: '1♦', value: '1D', color: 'diamond' },
+  { label: '1♥', value: '1H', color: 'heart' },
+  { label: '1♠', value: '1S', color: 'spade' },
+  { label: '1NT', value: '1NT', color: 'nt' },
+  { label: '2♣', value: '2C', color: 'club' },
+  { label: '2♦', value: '2D', color: 'diamond' },
+  { label: '2♥', value: '2H', color: 'heart' },
+  { label: '2♠', value: '2S', color: 'spade' },
+  { label: '2NT', value: '2NT', color: 'nt' },
+  { label: '3♣', value: '3C', color: 'club' },
+  { label: '3♦', value: '3D', color: 'diamond' },
+  { label: '3♥', value: '3H', color: 'heart' },
+  { label: '3♠', value: '3S', color: 'spade' },
+];
+
+const App = () => {
+  const [currentView, setCurrentView] = useState('home');
+  
+  return (
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #0f1419 0%, #1a2332 100%)',
+      color: '#e8edf2',
+      fontFamily: "'DM Sans', -apple-system, sans-serif"
+    }}>
+      {currentView === 'home' && <HomeView onNavigate={setCurrentView} />}
+      {currentView === 'play' && <PlayView onNavigate={setCurrentView} />}
+      {currentView === 'about' && <AboutView onNavigate={setCurrentView} />}
+    </div>
+  );
+};
+
+const HomeView = ({ onNavigate }) => {
+  return (
+    <div style={{
+      maxWidth: '800px',
+      margin: '0 auto',
+      padding: '60px 24px',
+      textAlign: 'center'
+    }}>
+      <div style={{
+        marginBottom: '48px',
+        animation: 'fadeIn 0.8s ease-out'
+      }}>
+        <h1 style={{
+          fontFamily: "'Playfair Display', Georgia, serif",
+          fontSize: '72px',
+          fontWeight: '700',
+          margin: '0 0 16px 0',
+          background: 'linear-gradient(135deg, #4ade80 0%, #22d3ee 100%)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text',
+          letterSpacing: '-0.02em'
+        }}>
+          SLAM
+        </h1>
+        <p style={{
+          fontSize: '20px',
+          color: '#94a3b8',
+          margin: '0',
+          fontWeight: '500',
+          letterSpacing: '0.05em'
+        }}>
+          Bridge Opening Bid Trainer
+        </p>
+      </div>
+
+      <div style={{
+        background: 'rgba(255, 255, 255, 0.03)',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        borderRadius: '16px',
+        padding: '40px 32px',
+        marginBottom: '32px',
+        textAlign: 'left',
+        backdropFilter: 'blur(10px)'
+      }}>
+        <h2 style={{
+          fontFamily: "'Playfair Display', Georgia, serif",
+          fontSize: '28px',
+          margin: '0 0 20px 0',
+          color: '#e8edf2'
+        }}>
+          Master Your Opening Bids
+        </h2>
+        <p style={{
+          fontSize: '16px',
+          lineHeight: '1.6',
+          color: '#cbd5e1',
+          margin: '0 0 16px 0'
+        }}>
+          Practice makes perfect. Each session presents 10 carefully selected hands
+          where you'll decide the opening bid. Get instant feedback with clear explanations.
+        </p>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: '16px',
+          marginTop: '24px'
+        }}>
+          {[
+            { icon: <Target size={20} />, text: 'Instant feedback' },
+            { icon: <Trophy size={20} />, text: 'Track your progress' },
+            { icon: <Shuffle size={20} />, text: 'Fresh hands each time' }
+          ].map((item, i) => (
+            <div key={i} style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              color: '#4ade80'
+            }}>
+              {item.icon}
+              <span style={{ color: '#e8edf2', fontSize: '14px' }}>{item.text}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <button
+        onClick={() => onNavigate('play')}
+        style={{
+          background: 'linear-gradient(135deg, #4ade80 0%, #22d3ee 100%)',
+          color: '#0f1419',
+          border: 'none',
+          borderRadius: '12px',
+          padding: '18px 48px',
+          fontSize: '18px',
+          fontWeight: '600',
+          cursor: 'pointer',
+          marginBottom: '16px',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '12px',
+          transition: 'all 0.3s ease',
+          boxShadow: '0 8px 24px rgba(74, 222, 128, 0.3)'
+        }}
+        onMouseEnter={e => {
+          e.target.style.transform = 'translateY(-2px)';
+          e.target.style.boxShadow = '0 12px 32px rgba(74, 222, 128, 0.4)';
+        }}
+        onMouseLeave={e => {
+          e.target.style.transform = 'translateY(0)';
+          e.target.style.boxShadow = '0 8px 24px rgba(74, 222, 128, 0.3)';
+        }}
+      >
+        Start Practice Session
+        <ChevronRight size={20} />
+      </button>
+
+      <div style={{ marginTop: '24px' }}>
+        <button
+          onClick={() => onNavigate('about')}
+          style={{
+            background: 'transparent',
+            color: '#94a3b8',
+            border: '1px solid rgba(255, 255, 255, 0.15)',
+            borderRadius: '8px',
+            padding: '12px 24px',
+            fontSize: '14px',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease'
+          }}
+          onMouseEnter={e => {
+            e.target.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+            e.target.style.color = '#e8edf2';
+          }}
+          onMouseLeave={e => {
+            e.target.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+            e.target.style.color = '#94a3b8';
+          }}
+        >
+          About System & Rules
+        </button>
+      </div>
+
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600&display=swap');
+        
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
+  );
+};
+
+const PlayView = ({ onNavigate }) => {
+  const [hands, setHands] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [selectedBid, setSelectedBid] = useState(null);
+  const [score, setScore] = useState(0);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [sessionComplete, setSessionComplete] = useState(false);
+  const [handResults, setHandResults] = useState([]);
+
+  // Initialize session
+  useEffect(() => {
+    startNewSession();
+  }, []);
+
+  const startNewSession = () => {
+    const shuffled = [...HANDS_DATA].sort(() => Math.random() - 0.5);
+    setHands(shuffled);
+    setCurrentIndex(0);
+    setScore(0);
+    setSelectedBid(null);
+    setShowFeedback(false);
+    setSessionComplete(false);
+    setHandResults([]);
+  };
+
+  const currentHand = hands[currentIndex];
+
+  const handleBidSelect = (bid) => {
+    if (showFeedback) return;
+    
+    setSelectedBid(bid);
+    setShowFeedback(true);
+
+    // Calculate points
+    let points = 0;
+    let result = 'incorrect';
+    
+    if (bid === currentHand.best_open) {
+      points = 2;
+      result = 'correct';
+    } else if (currentHand.alts && currentHand.alts.includes(bid)) {
+      points = 1;
+      result = 'close';
+    }
+
+    setScore(prev => prev + points);
+    setHandResults(prev => [...prev, { hand: currentHand.id, bid, points, result }]);
+  };
+
+  const handleNext = () => {
+    if (currentIndex < hands.length - 1) {
+      setCurrentIndex(prev => prev + 1);
+      setSelectedBid(null);
+      setShowFeedback(false);
+    } else {
+      setSessionComplete(true);
+    }
+  };
+
+  const handleReplay = () => {
+    setSelectedBid(null);
+    setShowFeedback(false);
+  };
+
+  if (!currentHand) return null;
+
+  if (sessionComplete) {
+    return <SessionSummary score={score} maxScore={hands.length * 2} results={handResults} onRestart={startNewSession} onHome={() => onNavigate('home')} />;
+  }
+
+  return (
+    <div style={{
+      maxWidth: '900px',
+      margin: '0 auto',
+      padding: '24px'
+    }}>
+      {/* Header */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '32px',
+        flexWrap: 'wrap',
+        gap: '16px'
+      }}>
+        <div>
+          <h2 style={{
+            fontFamily: "'Playfair Display', Georgia, serif",
+            fontSize: '24px',
+            margin: '0 0 4px 0'
+          }}>
+            Hand {currentIndex + 1} of {hands.length}
+          </h2>
+          <div style={{
+            fontSize: '14px',
+            color: '#94a3b8'
+          }}>
+            Score: <span style={{ color: '#4ade80', fontWeight: '600', fontSize: '16px' }}>{score}</span> / {hands.length * 2}
+          </div>
+        </div>
+        <button
+          onClick={() => onNavigate('home')}
+          style={{
+            background: 'transparent',
+            color: '#94a3b8',
+            border: '1px solid rgba(255, 255, 255, 0.15)',
+            borderRadius: '8px',
+            padding: '8px 16px',
+            fontSize: '14px',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease'
+          }}
+          onMouseEnter={e => e.target.style.borderColor = 'rgba(255, 255, 255, 0.3)'}
+          onMouseLeave={e => e.target.style.borderColor = 'rgba(255, 255, 255, 0.15)'}
+        >
+          ← Home
+        </button>
+      </div>
+
+      {/* Hand Display */}
+      <HandDisplay hand={currentHand} />
+
+      {/* Bid Selection */}
+      {!showFeedback && (
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.03)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          borderRadius: '16px',
+          padding: '32px 24px',
+          marginTop: '24px'
+        }}>
+          <h3 style={{
+            margin: '0 0 20px 0',
+            fontSize: '18px',
+            fontWeight: '600',
+            textAlign: 'center',
+            color: '#cbd5e1'
+          }}>
+            What's your opening bid?
+          </h3>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))',
+            gap: '10px',
+            maxWidth: '700px',
+            margin: '0 auto'
+          }}>
+            {BID_OPTIONS.map(bid => (
+              <BidButton
+                key={bid.value}
+                bid={bid}
+                onClick={() => handleBidSelect(bid.value)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Feedback */}
+      {showFeedback && (
+        <FeedbackPanel
+          selectedBid={selectedBid}
+          currentHand={currentHand}
+          handResults={handResults}
+          onNext={handleNext}
+          onReplay={handleReplay}
+          isLastHand={currentIndex === hands.length - 1}
+        />
+      )}
+    </div>
+  );
+};
+
+const HandDisplay = ({ hand }) => {
+  const suits = [
+    { symbol: '♠', name: 'S', color: '#000', bgColor: '#e2e8f0', holding: hand.hand.S },
+    { symbol: '♥', name: 'H', color: '#dc2626', bgColor: '#fee2e2', holding: hand.hand.H },
+    { symbol: '♦', name: 'D', color: '#ea580c', bgColor: '#fed7aa', holding: hand.hand.D },
+    { symbol: '♣', name: 'C', color: '#166534', bgColor: '#dcfce7', holding: hand.hand.C }
+  ];
+
+  return (
+    <div style={{
+      background: 'linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)',
+      border: '1px solid rgba(255, 255, 255, 0.1)',
+      borderRadius: '20px',
+      padding: '32px',
+      backdropFilter: 'blur(10px)',
+      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
+    }}>
+      {/* Position & Vulnerability */}
+      <div style={{
+        display: 'flex',
+        gap: '16px',
+        marginBottom: '24px',
+        flexWrap: 'wrap'
+      }}>
+        <div style={{
+          background: 'rgba(74, 222, 128, 0.1)',
+          border: '1px solid rgba(74, 222, 128, 0.3)',
+          borderRadius: '8px',
+          padding: '8px 16px',
+          fontSize: '14px',
+          fontWeight: '600',
+          color: '#4ade80'
+        }}>
+          Seat: {hand.seat}
+        </div>
+        <div style={{
+          background: getVulColor(hand.vul).bg,
+          border: `1px solid ${getVulColor(hand.vul).border}`,
+          borderRadius: '8px',
+          padding: '8px 16px',
+          fontSize: '14px',
+          fontWeight: '600',
+          color: getVulColor(hand.vul).text
+        }}>
+          Vul: {hand.vul}
+        </div>
+      </div>
+
+      {/* Suits */}
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px'
+      }}>
+        {suits.map(suit => (
+          <div
+            key={suit.name}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '16px',
+              background: 'rgba(255, 255, 255, 0.05)',
+              borderRadius: '12px',
+              padding: '16px 20px',
+              transition: 'transform 0.2s ease',
+              cursor: 'default'
+            }}
+            onMouseEnter={e => e.currentTarget.style.transform = 'translateX(4px)'}
+            onMouseLeave={e => e.currentTarget.style.transform = 'translateX(0)'}
+          >
+            <div style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '8px',
+              background: suit.bgColor,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '24px',
+              color: suit.color,
+              fontWeight: '700',
+              flexShrink: 0
+            }}>
+              {suit.symbol}
+            </div>
+            <div style={{
+              fontSize: '20px',
+              fontWeight: '600',
+              letterSpacing: '0.1em',
+              color: '#e8edf2',
+              fontFamily: "'DM Mono', monospace"
+            }}>
+              {suit.holding}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const BidButton = ({ bid, onClick }) => {
+  const [isHovered, setIsHovered] = useState(false);
+
+  const getColorScheme = (color) => {
+    const schemes = {
+      gray: { bg: 'rgba(148, 163, 184, 0.1)', border: 'rgba(148, 163, 184, 0.3)', text: '#cbd5e1' },
+      club: { bg: 'rgba(22, 101, 52, 0.2)', border: 'rgba(74, 222, 128, 0.4)', text: '#4ade80' },
+      diamond: { bg: 'rgba(234, 88, 12, 0.2)', border: 'rgba(251, 146, 60, 0.4)', text: '#fb923c' },
+      heart: { bg: 'rgba(220, 38, 38, 0.2)', border: 'rgba(248, 113, 113, 0.4)', text: '#f87171' },
+      spade: { bg: 'rgba(15, 20, 25, 0.4)', border: 'rgba(226, 232, 240, 0.4)', text: '#e2e8f0' },
+      nt: { bg: 'rgba(59, 130, 246, 0.2)', border: 'rgba(96, 165, 250, 0.4)', text: '#60a5fa' }
+    };
+    return schemes[color] || schemes.gray;
+  };
+
+  const colors = getColorScheme(bid.color);
+
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      style={{
+        background: isHovered ? colors.bg : 'rgba(255, 255, 255, 0.05)',
+        border: `2px solid ${isHovered ? colors.border : 'rgba(255, 255, 255, 0.1)'}`,
+        borderRadius: '12px',
+        padding: '14px 8px',
+        fontSize: '18px',
+        fontWeight: '600',
+        color: colors.text,
+        cursor: 'pointer',
+        transition: 'all 0.2s ease',
+        transform: isHovered ? 'translateY(-2px)' : 'translateY(0)',
+        boxShadow: isHovered ? `0 6px 20px ${colors.bg}` : 'none'
+      }}
+    >
+      {bid.label}
+    </button>
+  );
+};
+
+const FeedbackPanel = ({ selectedBid, currentHand, handResults, onNext, onReplay, isLastHand }) => {
+  const lastResult = handResults[handResults.length - 1];
+  const isCorrect = lastResult.result === 'correct';
+  const isClose = lastResult.result === 'close';
+
+  const resultConfig = {
+    correct: {
+      title: '✓ Correct!',
+      bg: 'rgba(74, 222, 128, 0.1)',
+      border: 'rgba(74, 222, 128, 0.3)',
+      color: '#4ade80'
+    },
+    close: {
+      title: '~ Acceptable',
+      bg: 'rgba(251, 146, 60, 0.1)',
+      border: 'rgba(251, 146, 60, 0.3)',
+      color: '#fb923c'
+    },
+    incorrect: {
+      title: '✗ Not Quite',
+      bg: 'rgba(248, 113, 113, 0.1)',
+      border: 'rgba(248, 113, 113, 0.3)',
+      color: '#f87171'
+    }
+  };
+
+  const config = resultConfig[lastResult.result];
+
+  return (
+    <div style={{
+      background: config.bg,
+      border: `2px solid ${config.border}`,
+      borderRadius: '16px',
+      padding: '32px',
+      marginTop: '24px',
+      animation: 'slideUp 0.3s ease-out'
+    }}>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: '24px',
+        flexWrap: 'wrap',
+        gap: '16px'
+      }}>
+        <div>
+          <h3 style={{
+            fontSize: '24px',
+            fontWeight: '700',
+            margin: '0 0 8px 0',
+            color: config.color
+          }}>
+            {config.title}
+          </h3>
+          <div style={{
+            fontSize: '16px',
+            color: '#cbd5e1'
+          }}>
+            You bid: <span style={{ fontWeight: '600', color: '#e8edf2' }}>{formatBid(selectedBid)}</span>
+            {' · '}
+            Best bid: <span style={{ fontWeight: '600', color: config.color }}>{formatBid(currentHand.best_open)}</span>
+          </div>
+        </div>
+        <div style={{
+          background: 'rgba(74, 222, 128, 0.2)',
+          borderRadius: '8px',
+          padding: '8px 16px',
+          fontSize: '20px',
+          fontWeight: '700',
+          color: '#4ade80'
+        }}>
+          +{lastResult.points} pts
+        </div>
+      </div>
+
+      <div style={{
+        background: 'rgba(255, 255, 255, 0.05)',
+        borderRadius: '12px',
+        padding: '20px',
+        marginBottom: '20px'
+      }}>
+        <h4 style={{
+          fontSize: '14px',
+          fontWeight: '600',
+          margin: '0 0 12px 0',
+          color: '#94a3b8',
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em'
+        }}>
+          Explanation
+        </h4>
+        {currentHand.explain.map((point, i) => (
+          <p key={i} style={{
+            margin: '0 0 8px 0',
+            fontSize: '15px',
+            lineHeight: '1.6',
+            color: '#e8edf2',
+            paddingLeft: '16px',
+            position: 'relative'
+          }}>
+            <span style={{
+              position: 'absolute',
+              left: '0',
+              color: config.color
+            }}>•</span>
+            {point}
+          </p>
+        ))}
+      </div>
+
+      {currentHand.alts && currentHand.alts.length > 0 && (
+        <div style={{
+          fontSize: '14px',
+          color: '#94a3b8',
+          marginBottom: '20px'
+        }}>
+          Alternative bids: {currentHand.alts.map(alt => formatBid(alt)).join(', ')}
+        </div>
+      )}
+
+      <div style={{
+        display: 'flex',
+        gap: '12px',
+        flexWrap: 'wrap'
+      }}>
+        <button
+          onClick={onNext}
+          style={{
+            flex: '1',
+            minWidth: '140px',
+            background: 'linear-gradient(135deg, #4ade80 0%, #22d3ee 100%)',
+            color: '#0f1419',
+            border: 'none',
+            borderRadius: '12px',
+            padding: '14px 24px',
+            fontSize: '16px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            transition: 'transform 0.2s ease'
+          }}
+          onMouseEnter={e => e.target.style.transform = 'translateY(-2px)'}
+          onMouseLeave={e => e.target.style.transform = 'translateY(0)'}
+        >
+          {isLastHand ? 'View Summary' : 'Next Hand'}
+          <ChevronRight size={18} />
+        </button>
+        <button
+          onClick={onReplay}
+          style={{
+            flex: '1',
+            minWidth: '140px',
+            background: 'rgba(255, 255, 255, 0.05)',
+            color: '#e8edf2',
+            border: '1px solid rgba(255, 255, 255, 0.15)',
+            borderRadius: '12px',
+            padding: '14px 24px',
+            fontSize: '16px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            transition: 'all 0.2s ease'
+          }}
+          onMouseEnter={e => {
+            e.target.style.background = 'rgba(255, 255, 255, 0.08)';
+            e.target.style.borderColor = 'rgba(255, 255, 255, 0.25)';
+          }}
+          onMouseLeave={e => {
+            e.target.style.background = 'rgba(255, 255, 255, 0.05)';
+            e.target.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+          }}
+        >
+          <RotateCcw size={18} />
+          Replay Hand
+        </button>
+      </div>
+
+      <style>{`
+        @keyframes slideUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
+    </div>
+  );
+};
+
+const SessionSummary = ({ score, maxScore, results, onRestart, onHome }) => {
+  const percentage = Math.round((score / maxScore) * 100);
+  const correctCount = results.filter(r => r.result === 'correct').length;
+  const closeCount = results.filter(r => r.result === 'close').length;
+
+  const getMessage = () => {
+    if (percentage >= 90) return { title: 'Outstanding! 🏆', text: 'You have mastered opening bids!' };
+    if (percentage >= 75) return { title: 'Excellent! 🎯', text: 'Strong performance, keep it up!' };
+    if (percentage >= 60) return { title: 'Good Work! ✓', text: 'You\'re making progress!' };
+    return { title: 'Keep Practicing! 📚', text: 'Every hand is a learning opportunity!' };
+  };
+
+  const message = getMessage();
+
+  return (
+    <div style={{
+      maxWidth: '600px',
+      margin: '60px auto',
+      padding: '24px',
+      textAlign: 'center'
+    }}>
+      <div style={{
+        background: 'linear-gradient(135deg, rgba(74, 222, 128, 0.1) 0%, rgba(34, 211, 238, 0.1) 100%)',
+        border: '2px solid rgba(74, 222, 128, 0.3)',
+        borderRadius: '20px',
+        padding: '48px 32px',
+        marginBottom: '32px'
+      }}>
+        <Trophy size={48} style={{ color: '#4ade80', marginBottom: '16px' }} />
+        <h2 style={{
+          fontFamily: "'Playfair Display', Georgia, serif",
+          fontSize: '36px',
+          margin: '0 0 12px 0',
+          color: '#e8edf2'
+        }}>
+          {message.title}
+        </h2>
+        <p style={{
+          fontSize: '18px',
+          color: '#cbd5e1',
+          margin: '0 0 32px 0'
+        }}>
+          {message.text}
+        </p>
+
+        <div style={{
+          display: 'inline-block',
+          background: 'rgba(74, 222, 128, 0.2)',
+          borderRadius: '16px',
+          padding: '24px 48px',
+          marginBottom: '24px'
+        }}>
+          <div style={{
+            fontSize: '56px',
+            fontWeight: '700',
+            color: '#4ade80',
+            fontFamily: "'Playfair Display', Georgia, serif"
+          }}>
+            {score} / {maxScore}
+          </div>
+          <div style={{
+            fontSize: '18px',
+            color: '#94a3b8',
+            marginTop: '4px'
+          }}>
+            {percentage}% correct
+          </div>
+        </div>
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+          gap: '16px',
+          marginTop: '24px'
+        }}>
+          <div style={{
+            background: 'rgba(74, 222, 128, 0.1)',
+            borderRadius: '12px',
+            padding: '16px'
+          }}>
+            <div style={{ fontSize: '24px', fontWeight: '700', color: '#4ade80' }}>
+              {correctCount}
+            </div>
+            <div style={{ fontSize: '14px', color: '#94a3b8' }}>Perfect</div>
+          </div>
+          <div style={{
+            background: 'rgba(251, 146, 60, 0.1)',
+            borderRadius: '12px',
+            padding: '16px'
+          }}>
+            <div style={{ fontSize: '24px', fontWeight: '700', color: '#fb923c' }}>
+              {closeCount}
+            </div>
+            <div style={{ fontSize: '14px', color: '#94a3b8' }}>Close</div>
+          </div>
+          <div style={{
+            background: 'rgba(248, 113, 113, 0.1)',
+            borderRadius: '12px',
+            padding: '16px'
+          }}>
+            <div style={{ fontSize: '24px', fontWeight: '700', color: '#f87171' }}>
+              {results.length - correctCount - closeCount}
+            </div>
+            <div style={{ fontSize: '14px', color: '#94a3b8' }}>Missed</div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{
+        display: 'flex',
+        gap: '12px',
+        flexWrap: 'wrap',
+        justifyContent: 'center'
+      }}>
+        <button
+          onClick={onRestart}
+          style={{
+            flex: '1',
+            minWidth: '200px',
+            background: 'linear-gradient(135deg, #4ade80 0%, #22d3ee 100%)',
+            color: '#0f1419',
+            border: 'none',
+            borderRadius: '12px',
+            padding: '16px 32px',
+            fontSize: '16px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            transition: 'transform 0.2s ease'
+          }}
+          onMouseEnter={e => e.target.style.transform = 'translateY(-2px)'}
+          onMouseLeave={e => e.target.style.transform = 'translateY(0)'}
+        >
+          <Shuffle size={18} />
+          New Session
+        </button>
+        <button
+          onClick={onHome}
+          style={{
+            flex: '1',
+            minWidth: '200px',
+            background: 'rgba(255, 255, 255, 0.05)',
+            color: '#e8edf2',
+            border: '1px solid rgba(255, 255, 255, 0.15)',
+            borderRadius: '12px',
+            padding: '16px 32px',
+            fontSize: '16px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease'
+          }}
+          onMouseEnter={e => {
+            e.target.style.background = 'rgba(255, 255, 255, 0.08)';
+            e.target.style.borderColor = 'rgba(255, 255, 255, 0.25)';
+          }}
+          onMouseLeave={e => {
+            e.target.style.background = 'rgba(255, 255, 255, 0.05)';
+            e.target.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+          }}
+        >
+          Back to Home
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const AboutView = ({ onNavigate }) => {
+  return (
+    <div style={{
+      maxWidth: '800px',
+      margin: '0 auto',
+      padding: '60px 24px'
+    }}>
+      <button
+        onClick={() => onNavigate('home')}
+        style={{
+          background: 'transparent',
+          color: '#94a3b8',
+          border: '1px solid rgba(255, 255, 255, 0.15)',
+          borderRadius: '8px',
+          padding: '8px 16px',
+          fontSize: '14px',
+          cursor: 'pointer',
+          marginBottom: '32px',
+          transition: 'all 0.2s ease'
+        }}
+        onMouseEnter={e => e.target.style.borderColor = 'rgba(255, 255, 255, 0.3)'}
+        onMouseLeave={e => e.target.style.borderColor = 'rgba(255, 255, 255, 0.15)'}
+      >
+        ← Back
+      </button>
+
+      <h1 style={{
+        fontFamily: "'Playfair Display', Georgia, serif",
+        fontSize: '48px',
+        margin: '0 0 16px 0',
+        background: 'linear-gradient(135deg, #4ade80 0%, #22d3ee 100%)',
+        WebkitBackgroundClip: 'text',
+        WebkitTextFillColor: 'transparent',
+        backgroundClip: 'text'
+      }}>
+        About SLAM
+      </h1>
+
+      <div style={{
+        background: 'rgba(255, 255, 255, 0.03)',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        borderRadius: '16px',
+        padding: '32px',
+        marginBottom: '24px',
+        lineHeight: '1.8'
+      }}>
+        <h2 style={{
+          fontFamily: "'Playfair Display', Georgia, serif",
+          fontSize: '28px',
+          margin: '0 0 16px 0',
+          color: '#e8edf2'
+        }}>
+          Bidding System
+        </h2>
+        <p style={{ margin: '0 0 16px 0', color: '#cbd5e1' }}>
+          SLAM uses Standard American Yellow Card (SAYC) principles with these conventions:
+        </p>
+        <ul style={{
+          margin: '0',
+          paddingLeft: '24px',
+          color: '#cbd5e1'
+        }}>
+          <li style={{ marginBottom: '8px' }}>
+            <strong style={{ color: '#4ade80' }}>5-card majors:</strong> 1♥ and 1♠ promise at least 5 cards
+          </li>
+          <li style={{ marginBottom: '8px' }}>
+            <strong style={{ color: '#4ade80' }}>1NT = 15–17 HCP:</strong> Balanced hand with stoppers
+          </li>
+          <li style={{ marginBottom: '8px' }}>
+            <strong style={{ color: '#4ade80' }}>2♣ strong:</strong> 22+ HCP or game-forcing hand (artificial)
+          </li>
+          <li style={{ marginBottom: '8px' }}>
+            <strong style={{ color: '#4ade80' }}>Weak twos:</strong> 6-card suit with 6-10 HCP
+          </li>
+          <li style={{ marginBottom: '8px' }}>
+            <strong style={{ color: '#4ade80' }}>3-level preempts:</strong> 7-card suit, limited strength
+          </li>
+        </ul>
+      </div>
+
+      <div style={{
+        background: 'rgba(255, 255, 255, 0.03)',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        borderRadius: '16px',
+        padding: '32px',
+        marginBottom: '24px',
+        lineHeight: '1.8'
+      }}>
+        <h2 style={{
+          fontFamily: "'Playfair Display', Georgia, serif",
+          fontSize: '28px',
+          margin: '0 0 16px 0',
+          color: '#e8edf2'
+        }}>
+          Scoring
+        </h2>
+        <div style={{ color: '#cbd5e1' }}>
+          <p style={{ margin: '0 0 12px 0' }}>
+            Each hand is scored based on your chosen opening bid:
+          </p>
+          <div style={{
+            display: 'grid',
+            gap: '12px',
+            marginTop: '16px'
+          }}>
+            <div style={{
+              background: 'rgba(74, 222, 128, 0.1)',
+              border: '1px solid rgba(74, 222, 128, 0.3)',
+              borderRadius: '8px',
+              padding: '12px 16px'
+            }}>
+              <strong style={{ color: '#4ade80' }}>2 points:</strong> Best opening bid
+            </div>
+            <div style={{
+              background: 'rgba(251, 146, 60, 0.1)',
+              border: '1px solid rgba(251, 146, 60, 0.3)',
+              borderRadius: '8px',
+              padding: '12px 16px'
+            }}>
+              <strong style={{ color: '#fb923c' }}>1 point:</strong> Acceptable alternative
+            </div>
+            <div style={{
+              background: 'rgba(248, 113, 113, 0.1)',
+              border: '1px solid rgba(248, 113, 113, 0.3)',
+              borderRadius: '8px',
+              padding: '12px 16px'
+            }}>
+              <strong style={{ color: '#f87171' }}>0 points:</strong> Incorrect bid
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{
+        background: 'rgba(255, 255, 255, 0.03)',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        borderRadius: '16px',
+        padding: '32px',
+        lineHeight: '1.8'
+      }}>
+        <h2 style={{
+          fontFamily: "'Playfair Display', Georgia, serif",
+          fontSize: '28px',
+          margin: '0 0 16px 0',
+          color: '#e8edf2'
+        }}>
+          How to Practice
+        </h2>
+        <p style={{ margin: '0 0 12px 0', color: '#cbd5e1' }}>
+          Each practice session presents 10 hands. For each hand:
+        </p>
+        <ol style={{
+          margin: '0',
+          paddingLeft: '24px',
+          color: '#cbd5e1'
+        }}>
+          <li style={{ marginBottom: '8px' }}>Review the hand, seat position, and vulnerability</li>
+          <li style={{ marginBottom: '8px' }}>Select your opening bid from the available options</li>
+          <li style={{ marginBottom: '8px' }}>Read the explanation to understand the reasoning</li>
+          <li style={{ marginBottom: '8px' }}>Move to the next hand or replay to reinforce learning</li>
+        </ol>
+        <p style={{ marginTop: '16px', color: '#94a3b8', fontSize: '14px' }}>
+          Tip: Focus on understanding <em>why</em> each bid is best, not just memorizing answers.
+        </p>
+      </div>
+
+      <div style={{
+        marginTop: '32px',
+        textAlign: 'center',
+        padding: '24px',
+        background: 'rgba(74, 222, 128, 0.05)',
+        borderRadius: '12px',
+        border: '1px solid rgba(74, 222, 128, 0.2)'
+      }}>
+        <p style={{
+          margin: '0',
+          color: '#cbd5e1',
+          fontSize: '14px'
+        }}>
+          SLAM is designed for focused, efficient practice. Start small, build confidence, master the fundamentals.
+        </p>
+      </div>
+    </div>
+  );
+};
+
+// Utility functions
+const getVulColor = (vul) => {
+  const colors = {
+    'None': { bg: 'rgba(148, 163, 184, 0.1)', border: 'rgba(148, 163, 184, 0.3)', text: '#94a3b8' },
+    'N/S': { bg: 'rgba(248, 113, 113, 0.1)', border: 'rgba(248, 113, 113, 0.3)', text: '#f87171' },
+    'E/W': { bg: 'rgba(248, 113, 113, 0.1)', border: 'rgba(248, 113, 113, 0.3)', text: '#f87171' },
+    'All': { bg: 'rgba(220, 38, 38, 0.2)', border: 'rgba(220, 38, 38, 0.4)', text: '#ef4444' }
+  };
+  return colors[vul] || colors['None'];
+};
+
+const formatBid = (bid) => {
+  if (bid === 'Pass') return 'Pass';
+  const suits = { C: '♣', D: '♦', H: '♥', S: '♠' };
+  const level = bid.charAt(0);
+  const suit = bid.substring(1);
+  return suit === 'NT' ? `${level}NT` : `${level}${suits[suit]}`;
+};
+
+export default App;
